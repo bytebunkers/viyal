@@ -1,0 +1,19 @@
+[package]
+name = "viyal"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ast = { path = "../../compiler/ast" }
+parser = { path = "../../compiler/parser" }
+bytecode = { path = "../../compiler/bytecode" }
+vm = { path = "../../vm" }
+stdlib = { path = "../../stdlib" }
+formatter = { path = "../formatter" }
+analyzer = { path = "../analyzer" }
+lsp = { path = "../lsp" }
+codegen = { path = "../../compiler/codegen" }
+pub_tool = { path = "../pub" }
+debugger = { path = "../debugger" }
+typechecker = { path = "../../compiler/typechecker" }
+notify = "8.2.0"

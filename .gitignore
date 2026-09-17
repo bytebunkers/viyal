@@ -1,0 +1,9 @@
+/target/
+/node_modules/
+/viyal-v0.1.0-windows/
+*.zip
+*.exe
+.DS_Store
+/website/node_modules/
+/website/dist/
+.viyal_out.c

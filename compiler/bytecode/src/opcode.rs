@@ -1,0 +1,40 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpCode {
+    OpConstant(usize),
+    OpAdd,
+    OpSubtract,
+    OpMultiply,
+    OpDivide,
+    OpEqual,
+    OpNotEqual,
+    OpLess,
+    OpGreater,
+    OpLessEqual,
+    OpGreaterEqual,
+    OpJump(usize),
+    OpJumpIfFalse(usize),
+    OpCall(usize, u8), // function name index, arg count
+    OpCallNative(usize, u8), // index into constants (string name), arg count
+    OpPrint,
+    OpClass(usize),
+    OpMethod(usize, usize, u8), // method name index, chunk index, arity
+    OpFunction(usize, usize, u8), // function name index, chunk index, arity
+    OpConstruct(usize, u8),
+    OpInvoke(usize, u8),
+    OpGetProperty(usize),
+    OpSetProperty(usize),
+    OpGetLocal(usize),
+    OpSetLocal(usize),
+    OpGetGlobal(usize),
+    OpSetGlobal(usize),
+    OpArray(usize),
+    OpMap(usize),
+    OpIndex,
+    OpIndexSet,
+    OpLength,
+    OpTry,
+    OpJumpIfOk(usize),
+    OpError,
+    OpPop,
+    OpReturn,
+}

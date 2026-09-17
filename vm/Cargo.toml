@@ -1,0 +1,11 @@
+[package]
+name = "vm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytecode = { path = "../compiler/bytecode" }
+interpreter = { path = "../compiler/interpreter" }
+ast = { path = "../compiler/ast" }
+gc = { path = "../runtime/gc" }
+ffi = { path = "../runtime/ffi" }

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Viyal - A fast, bytecode-compiled programming language with structural concurrency." />
+    <title>Viyal Programming Language</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="logo">
+        <div class="logo-icon">V</div>
+        Viyal
+      </div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#syntax">Syntax</a>
+        <a href="#download" class="btn-primary-small">Download v0.1.0</a>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+      <div class="hero-bg-glow"></div>
+      <div class="hero-content">
+        <div class="badge">v0.1.0 Alpha is live</div>
+        <h1>The Language for the <span class="text-gradient">Future</span></h1>
+        <p>Viyal is a fast, dynamically typed, bytecode-compiled programming language featuring sound null safety, hot reloading, and built-in structured concurrency.</p>
+        <div class="hero-actions">
+          <a href="#download" class="btn-primary">Download Windows Build</a>
+          <a href="https://github.com/viyal/viyal" class="btn-secondary">View on GitHub</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+      <div class="section-header">
+        <h2>Why Viyal?</h2>
+        <p>Designed for developer happiness and raw performance.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Lightning Fast VM</h3>
+          <p>Powered by a custom bytecode compiler and stack-based Virtual Machine written in Rust.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Sound Null Safety</h3>
+          <p>Eliminate NullPointerExceptions at runtime with a strict, flow-sensitive type checker.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Hot Reloading</h3>
+          <p>Instantly see your changes without restarting the state using the built-in watcher.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧵</div>
+          <h3>Structured Concurrency</h3>
+          <p>Write safe concurrent code using lightweight tasks and channels, inspired by Go and Kotlin.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Syntax Section -->
+    <section id="syntax" class="syntax-section">
+      <div class="section-header">
+        <h2>Beautiful, Familiar Syntax</h2>
+        <p>If you know C, JS, or Dart, you'll feel right at home.</p>
+      </div>
+      
+      <div class="code-showcase">
+        <div class="code-tabs">
+          <button class="tab active" data-target="code-hello">Hello World</button>
+          <button class="tab" data-target="code-vars">Variables</button>
+          <button class="tab" data-target="code-loops">Loops</button>
+        </div>
+        
+        <div class="code-content active" id="code-hello">
+          <button class="copy-btn">Copy</button>
+          <pre><code>void main() {
+    print("Welcome to Viyal!");
+    print(add(10, 20));
+}
+
+fn add(a, b) {
+    return a + b;
+}</code></pre>
+        </div>
+
+        <div class="code-content" id="code-vars">
+          <button class="copy-btn">Copy</button>
+          <pre><code>let name = "Viyal";
+let version = 0.1;
+let is_cool = true;
+let arr = [1, 2, 3];
+let map = {"key": "value"};
+
+print(name + " " + string(version));</code></pre>
+        </div>
+
+        <div class="code-content" id="code-loops">
+          <button class="copy-btn">Copy</button>
+          <pre><code>void main() {
+    // Range loop
+    for i in 0..5 {
+        print(i);
+    }
+    
+    // Iterating over arrays
+    let arr = [10, 20, 30];
+    for x in arr {
+        print(x);
+    }
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="cta-section">
+      <h2>Ready to start building?</h2>
+      <p>Download the standalone Windows binary and get started in seconds. No dependencies required.</p>
+      <a href="/viyal-v0.1.0-windows.zip" class="btn-primary large">Download v0.1.0 (Windows)</a>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-content">
+        <div class="logo">
+          <div class="logo-icon">V</div>
+          Viyal
+        </div>
+        <p>&copy; 2026 Viyal Programming Language. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+[package]
+name = "stdlib"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+vm = { path = "../vm" }
+ffi = { path = "../runtime/ffi" }
+interpreter = { path = "../compiler/interpreter" }
+bytecode = { path = "../compiler/bytecode" }
+ureq = "2.9"
+serde_json = "1.0"

@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "compiler/lexer",
+    "compiler/parser",
+    "compiler/ast",
+    "compiler/resolver",
+    "compiler/typechecker",
+    "compiler/hir",
+    "compiler/mir",
+    "compiler/optimizer",
+    "compiler/bytecode",
+    "compiler/codegen",
+    "runtime/gc",
+    "runtime/async",
+    "runtime/concurrency",
+    "runtime/io",
+    "runtime/ffi",
+    "vm",
+    "stdlib",
+    "tools/cli",
+    "tools/formatter",
+    "tools/analyzer",
+    "tools/lsp",
+    "tools/debugger"
+, "compiler/interpreter", "tools/pub"]
+resolver = "2"
