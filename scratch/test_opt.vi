@@ -1,0 +1,27 @@
+Any test_sccp() {
+    var a = 10;
+    var b = 20;
+    var c = a + b;
+    var d = 0;
+    
+    if (c == 30) {
+        d = c + c;
+    } else {
+        d = 999;
+    }
+    
+    return d;
+}
+
+Any test_gvn(Any x) {
+    var a = x + 5;
+    var b = x + 5;
+    var c = a + b;
+    return c;
+}
+
+Any main() {
+    print(test_sccp());
+    print(test_gvn(10));
+    return null;
+}

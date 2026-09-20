@@ -1,0 +1,16 @@
+class Main {
+    void test_match(int x) {
+        var result = match x {
+            1 => "one",
+            2 => "two",
+            _ => "other",
+        };
+        print(result);
+    }
+
+    void run() {
+        this.test_match(1);
+        this.test_match(2);
+        this.test_match(5);
+    }
+}

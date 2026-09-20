@@ -31,6 +31,11 @@ pub enum Token {
     #[token("mut")] Mut,
     #[token("in")] In,
     #[token("type")] TypeKeyword,
+    #[token("match")] Match,
+    #[token("import")] Import,
+    #[token("export")] Export,
+    #[token("from")] From,
+    #[token("as")] As,
 
     // Types (built-ins for now)
     #[token("int")] Int,

@@ -35,6 +35,7 @@ pub enum OpCode {
     OpTry,
     OpJumpIfOk(usize),
     OpError,
+    OpDuplicate,
     OpPop,
     OpReturn,
 }

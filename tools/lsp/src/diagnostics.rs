@@ -26,18 +26,20 @@ pub fn publish_diagnostics(connection: &Connection, uri: Url, text: String) {
                 diagnostics.push(diag);
             }
         }
-        Err(parse_err) => {
-            // Map byte span to line/col
-            let start = byte_offset_to_position(&text, parse_err.span.start);
-            let end = byte_offset_to_position(&text, parse_err.span.end);
-            
-            let diag = Diagnostic {
-                range: Range { start, end },
-                severity: Some(DiagnosticSeverity::ERROR),
-                message: parse_err.message,
-                ..Default::default()
-            };
-            diagnostics.push(diag);
+        Err(parse_errors) => {
+            for parse_err in parse_errors {
+                // Map byte span to line/col
+                let start = byte_offset_to_position(&text, parse_err.span.start);
+                let end = byte_offset_to_position(&text, parse_err.span.end);
+                
+                let diag = Diagnostic {
+                    range: Range { start, end },
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    message: parse_err.message.clone(),
+                    ..Default::default()
+                };
+                diagnostics.push(diag);
+            }
         }
     }
 

@@ -60,7 +60,7 @@ impl BytecodeCompiler {
         let mut has_main_func = false;
 
         for decl in &program.declarations {
-            if let Decl::Class { name, methods, .. } = &decl.node {
+            if let Decl::Class { name, methods, is_exported: _, .. } = &decl.node {
                 let name_idx = self.chunk.add_constant(Value::String(name.clone()));
                 self.chunk.write(OpCode::OpClass(name_idx), 1);
                 
@@ -90,7 +90,7 @@ impl BytecodeCompiler {
                     let meth_name_idx = self.chunk.add_constant(Value::String(method.name.clone()));
                     self.chunk.write(OpCode::OpMethod(meth_name_idx, chunk_idx, method.params.len() as u8), 1);
                 }
-            } else if let Decl::Function(method) = &decl.node {
+            } else if let Decl::Function(method, _) = &decl.node {
                 if method.name == "main" {
                     has_main_func = true;
                 }
@@ -103,7 +103,7 @@ impl BytecodeCompiler {
                 
                 if let Stmt::Block(stmts) = &method.body.node {
                     for stmt in stmts {
-                        method_compiler.compile_stmt(stmt)?;
+                        method_compiler.compile_stmt(&stmt)?;
                     }
                 }
                 method_compiler.end_scope();
@@ -118,9 +118,25 @@ impl BytecodeCompiler {
             }
         }
         
+        let mut has_test_runner = false;
+        for decl in &program.declarations {
+            if let Decl::Class { name, is_exported: _, .. } = &decl.node {
+                if name == "__TestRunner" {
+                    has_test_runner = true;
+                    break;
+                }
+            }
+        }
+
         if has_main_func {
             let main_name_idx = self.chunk.add_constant(Value::String("main".to_string()));
             self.chunk.write(OpCode::OpCall(main_name_idx, 0), 1);
+            self.chunk.write(OpCode::OpPop, 1);
+        } else if has_test_runner {
+            let main_name_idx = self.chunk.add_constant(Value::String("__TestRunner".to_string()));
+            self.chunk.write(OpCode::OpConstruct(main_name_idx, 0), 1);
+            let run_name_idx = self.chunk.add_constant(Value::String("run".to_string()));
+            self.chunk.write(OpCode::OpInvoke(run_name_idx, 0), 1);
             self.chunk.write(OpCode::OpPop, 1);
         } else {
             // Find Main.run to execute it.
@@ -351,7 +367,7 @@ impl BytecodeCompiler {
                     _ => return Err("Unsupported binary op".into()),
                 }
             },
-            Expr::Call(target, args) => {
+            Expr::Call(target, _, args) => {
                 if let Expr::Identifier(id) = &target.node {
                     if id == "print" {
                         if let Some(arg) = args.first() {
@@ -379,7 +395,7 @@ impl BytecodeCompiler {
                     self.chunk.write(OpCode::OpInvoke(name_idx, args.len() as u8), line);
                 }
             }
-            Expr::New(class_name, args) => {
+            Expr::New(class_name, _, args) => {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
@@ -432,10 +448,92 @@ impl BytecodeCompiler {
                     return Err("Cannot use 'this' outside of a class".into());
                 }
             }
-            Expr::PropertyAccess(_obj, method_name) => {
-                // If it's used as an expression (not a call), we don't have a specific opcode right now?
-                // Wait, if it's a property access not in a call, we return an error for now since we only support method calls.
-                return Err(format!("Property access without call is not supported yet: {:?}", method_name));
+            Expr::PropertyAccess(obj, method_name) => {
+                self.compile_expr(obj)?;
+                let name_idx = self.chunk.add_constant(Value::String(method_name.clone()));
+                self.chunk.write(OpCode::OpGetProperty(name_idx), line);
+            }
+            Expr::PropertyAssign(obj, method_name, value) => {
+                self.compile_expr(obj)?;
+                self.compile_expr(value)?;
+                let name_idx = self.chunk.add_constant(Value::String(method_name.clone()));
+                self.chunk.write(OpCode::OpSetProperty(name_idx), line);
+            }
+            Expr::Match(target, arms) => {
+                self.compile_expr(target)?;
+                
+                let mut jump_ends = Vec::new();
+                
+                for (pat, arm_expr) in arms {
+                    match pat {
+                        ast::MatchPattern::CatchAll => {
+                            // Pop the target from stack, we don't need it for catch-all
+                            self.chunk.write(OpCode::OpPop, line);
+                            // Compile body
+                            self.compile_expr(arm_expr)?;
+                            // Unconditional jump to end
+                            let end_jump = self.chunk.code.len();
+                            self.chunk.write(OpCode::OpJump(0), line);
+                            jump_ends.push(end_jump);
+                        },
+                        ast::MatchPattern::Identifier(id) => {
+                            // Binding identifier! We need to create a local variable block, but since MVP doesn't have 
+                            // nested blocks cleanly setting locals for arms, we will treat it as a CatchAll for now!
+                            // (Typechecker already verified no bindings are used).
+                            self.chunk.write(OpCode::OpPop, line);
+                            self.compile_expr(arm_expr)?;
+                            let end_jump = self.chunk.code.len();
+                            self.chunk.write(OpCode::OpJump(0), line);
+                            jump_ends.push(end_jump);
+                        },
+                        ast::MatchPattern::Literal(lit) => {
+                            // Duplicate target
+                            self.chunk.write(OpCode::OpDuplicate, line);
+                            
+                            // Load literal
+                            let val = match lit {
+                                Literal::Integer(i) => Value::Integer(*i),
+                                Literal::Float(f) => Value::Float(*f),
+                                Literal::String(s) => Value::String(s.clone()),
+                                Literal::Boolean(b) => Value::Boolean(*b),
+                                Literal::Null => Value::Null,
+                            };
+                            let idx = self.chunk.add_constant(val);
+                            self.chunk.write(OpCode::OpConstant(idx), line);
+                            
+                            // Check equality (Target == Literal)
+                            self.chunk.write(OpCode::OpEqual, line);
+                            
+                            // Jump to next arm if false
+                            let next_arm_jump = self.chunk.code.len();
+                            self.chunk.write(OpCode::OpJumpIfFalse(0), line);
+                            
+                            // If true: Pop the equality result
+                            self.chunk.write(OpCode::OpPop, line);
+                            // Pop the original target too!
+                            self.chunk.write(OpCode::OpPop, line);
+                            
+                            // Compile body
+                            self.compile_expr(arm_expr)?;
+                            
+                            // Unconditional jump to end
+                            let end_jump = self.chunk.code.len();
+                            self.chunk.write(OpCode::OpJump(0), line);
+                            jump_ends.push(end_jump);
+                            
+                            // Patch next_arm_jump
+                            self.chunk.patch_jump(next_arm_jump, self.chunk.code.len());
+                            // We jumped here if false. We need to pop the equality result (which was false)
+                            self.chunk.write(OpCode::OpPop, line);
+                        }
+                    }
+                }
+                
+                // Patch all end_jumps to here
+                let end_idx = self.chunk.code.len();
+                for j in jump_ends {
+                    self.chunk.patch_jump(j, end_idx);
+                }
             }
             _ => return Err(format!("Unsupported expr: {:?}", expr.node)),
         }

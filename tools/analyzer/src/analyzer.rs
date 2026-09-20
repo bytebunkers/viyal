@@ -34,7 +34,7 @@ impl Analyzer {
         }
         
         match decl {
-            Decl::Function(method) => {
+            Decl::Function(method, _) => {
                 self.visit_stmt(&method.body.node);
             }
             Decl::Class { methods, .. } => {
@@ -42,7 +42,7 @@ impl Analyzer {
                     self.visit_stmt(&method.body.node);
                 }
             }
-            Decl::TypeAlias { .. } => {
+            Decl::TypeAlias { .. } | Decl::Import { .. } => {
                 // Currently no expressions inside type aliases to analyze
             }
         }
@@ -108,7 +108,7 @@ impl Analyzer {
                 self.visit_expr(&left.node);
                 self.visit_expr(&right.node);
             }
-            Expr::Call(callee, args) => {
+            Expr::Call(callee, _, args) => {
                 self.visit_expr(&callee.node);
                 for arg in args {
                     self.visit_expr(&arg.node);
@@ -121,7 +121,7 @@ impl Analyzer {
                 self.visit_expr(&left.node);
                 self.visit_expr(&right.node);
             }
-            Expr::New(_, args) => {
+            Expr::New(_, _, args) => {
                 for arg in args {
                     self.visit_expr(&arg.node);
                 }
@@ -156,6 +156,12 @@ impl Analyzer {
             Expr::UnwrapOrElse(inner, block) => {
                 self.visit_expr(&inner.node);
                 self.visit_stmt(&block.node);
+            }
+            Expr::Match(target, arms) => {
+                self.visit_expr(&target.node);
+                for (_, arm_expr) in arms {
+                    self.visit_expr(&arm_expr.node);
+                }
             }
         }
     }

@@ -51,9 +51,9 @@ impl CGenerator {
                     } else {
                         // MVP: Just emit as standalone C function
                         let ret_type = match &method.return_type {
-                            Some(Type::Named(n)) if n == "void" => "void",
-                            Some(Type::Named(n)) if n == "int" => "int64_t",
-                            Some(Type::Named(n)) if n == "String" => "const char*",
+                            Some(Type::Named(n, _)) if n == "void" => "void",
+                            Some(Type::Named(n, _)) if n == "int" => "int64_t",
+                            Some(Type::Named(n, _)) if n == "String" => "const char*",
                             _ => "void",
                         };
                         writeln!(&mut self.output, "{} {}() {{", ret_type, method.name).unwrap();
@@ -64,7 +64,7 @@ impl CGenerator {
                     }
                 }
             }
-            Decl::Function(method) => {
+            Decl::Function(method, _) => {
                 // MVP
                 writeln!(&mut self.output, "void {}() {{", method.name).unwrap();
                 self.indent_level += 1;
@@ -72,16 +72,19 @@ impl CGenerator {
                 self.indent_level -= 1;
                 self.output.push_str("}\n");
             }
-            Decl::TypeAlias { name, target_type } => {
+            Decl::TypeAlias { name, target_type, .. } => {
                 // C typedef representation
                 let c_type = match target_type {
-                    Type::Named(n) if n == "int" => "int64_t",
-                    Type::Named(n) if n == "double" => "double",
-                    Type::Named(n) if n == "bool" => "bool",
-                    Type::Named(n) if n == "String" => "const char*",
+                    Type::Named(n, _) if n == "int" => "int64_t",
+                    Type::Named(n, _) if n == "double" => "double",
+                    Type::Named(n, _) if n == "bool" => "bool",
+                    Type::Named(n, _) if n == "String" => "const char*",
                     _ => "void*",
                 };
                 writeln!(&mut self.output, "typedef {} {};", c_type, name).unwrap();
+            }
+            Decl::Import { .. } => {
+                // To be implemented
             }
         }
         Ok(())
@@ -115,7 +118,7 @@ impl CGenerator {
             Expr::Literal(Literal::Integer(i)) => {
                 write!(&mut self.output, "{}", i).unwrap();
             }
-            Expr::Call(callee, args) => {
+            Expr::Call(callee, _, args) => {
                 if let Expr::Identifier(id) = &callee.node {
                     if id == "print" {
                         // MVP string printing

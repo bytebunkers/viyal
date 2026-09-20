@@ -1,16 +1,13 @@
 use ast::Span;
-use std::fmt;
+use miette::Diagnostic;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Error, Diagnostic)]
+#[error("Parse Error: {message}")]
+#[diagnostic(code(viyal::syntax_error))]
 pub struct ParseError {
     pub message: String,
+    
+    #[label("here")]
     pub span: Span,
 }
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at {}..{}", self.message, self.span.start, self.span.end)
-    }
-}
-
-impl std::error::Error for ParseError {}

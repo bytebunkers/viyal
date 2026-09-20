@@ -18,6 +18,9 @@ pub fn analyze(source: &str) -> Result<Vec<AnalyzerWarning>, String> {
             let mut analyzer = Analyzer::new();
             Ok(analyzer.analyze_program(&program))
         }
-        Err(e) => Err(format!("Parse error: {}", e.message)),
+        Err(errors) => {
+            let messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+            Err(format!("Parse errors: {}", messages.join(", ")))
+        },
     }
 }

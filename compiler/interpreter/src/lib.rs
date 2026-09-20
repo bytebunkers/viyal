@@ -44,10 +44,10 @@ impl<'a> Interpreter<'a> {
                     self.execute_stmt(&method.body.node)?;
                 }
             },
-            Decl::Function(method) => {
+            Decl::Function(method, _) => {
                 self.execute_stmt(&method.body.node)?;
             }
-            Decl::TypeAlias { .. } => {
+            Decl::TypeAlias { .. } | Decl::Import { .. } => {
                 // No runtime effect for aliases in the simple tree-walk interpreter
             }
         }
@@ -83,7 +83,7 @@ impl<'a> Interpreter<'a> {
                     Literal::Null => Ok(Value::Null),
                 }
             },
-            Expr::Call(target, args) => {
+            Expr::Call(target, _, args) => {
                 // Hardcode built-in 'print' function
                 if let Expr::Identifier(ref id) = target.node {
                     if id == "print" {
@@ -104,7 +104,7 @@ impl<'a> Interpreter<'a> {
                     Err(RuntimeError(format!("Undefined variable '{}'", name)))
                 }
             },
-            Expr::New(_class_name, _args) => {
+            Expr::New(_class_name, _, _args) => {
                 // Mock object creation
                 Ok(Value::Void)
             },

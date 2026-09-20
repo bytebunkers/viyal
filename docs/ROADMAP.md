@@ -51,8 +51,11 @@ The development of the Viyal language follows strict milestone-based quality gat
 ## M13 — Web/WASM
 - WebAssembly backend compilation target.
 
-## M14 — Mobile/Desktop Ecosystem
-- UI integration bindings (FFI/Platform channels).
+## M14 — Declarative Cross-Platform UI Framework
+- Develop a declarative, reactive UI framework (Viyal UI).
+- Support Mobile (iOS/Android), Desktop (Win/Mac/Linux), and Web (WASM/WebGL).
+- Use a high-performance rendering engine (e.g., Skia) for pixel-perfect consistency.
+- Integrate Hot Reloading into the UI widget tree.
 
 ## M15 — Advanced Language Features
 - Macros, AI-Native APIs, Metaprogramming.

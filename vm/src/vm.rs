@@ -314,12 +314,18 @@ impl VM {
                                 return InterpretResult::RuntimeError(format!("Expected {} arguments, got {}", func_obj.arity, arg_count));
                             }
                             let new_frame = CallFrame {
-                                function_handle: 0, // Top level func, not bound to a handle natively in the same way? Wait, we can just pass 0 for now.
+                                function_handle: 0,
                                 chunk: func_obj.chunk.clone(),
                                 ip: 0,
                                 base_slot: self.stack.len() - arg_count as usize,
                             };
                             self.frames.push(new_frame);
+                        } else if let Some(native_func) = self.natives.get(func_name).cloned() {
+                            let args = self.stack.split_off(self.stack.len() - arg_count as usize);
+                            match native_func.call(self, &args) {
+                                Ok(ret_val) => self.stack.push(ret_val),
+                                Err(msg) => return InterpretResult::RuntimeError(msg),
+                            }
                         } else {
                             return InterpretResult::RuntimeError(format!("Function {} not found", func_name));
                         }
@@ -361,6 +367,21 @@ impl VM {
                                 } else { None }
                             },
                             Some(GcObj::Module(module)) => module.methods.get(&method_name).cloned(),
+                            Some(GcObj::Array(_)) => {
+                                if method_name == "push" {
+                                    if arg_count != 1 {
+                                        return InterpretResult::RuntimeError("Array.push expects 1 argument".into());
+                                    }
+                                    let arg = self.stack.pop().unwrap();
+                                    self.stack.pop(); // pop receiver
+                                    if let Some(GcObj::Array(arr)) = self.gc.get_mut(GcHandle(obj_handle)) {
+                                        arr.elements.push(arg);
+                                    }
+                                    self.stack.push(Value::Null);
+                                    continue;
+                                }
+                                return InterpretResult::RuntimeError(format!("Method {} not found on Array", method_name));
+                            },
                             _ => return InterpretResult::RuntimeError("Cannot invoke method on this object type".into()),
                         };
                         
@@ -582,6 +603,10 @@ impl VM {
                         _ => return InterpretResult::RuntimeError("Value does not have a length".into()),
                     }
                 },
+                OpCode::OpDuplicate => {
+                    let v = self.stack.last().cloned().unwrap_or(Value::Null);
+                    self.stack.push(v);
+                }
                 OpCode::OpPop => {
                     self.stack.pop();
                 },

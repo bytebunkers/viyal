@@ -32,4 +32,6 @@ To transition Viyal from a prototype into a production-ready "real" programming 
    - *Built-in Testing:* Integrating a test runner directly into the `viyal` CLI to support unit-tests seamlessly.
 
 ## Next Immediate Goal
-Expand the **Standard Library (`fs`, `http`, `os`)** or finalize the **Map Datatype & JSON Utilities** to provide real-world usability and network interaction capabilities.
+1. **Migration to `.vyl`:** Change the file extension from `.vy` to `.vyl` across the repository to avoid collisions with Vyper.
+2. **Language Stability:** Implement a built-in testing framework (`viyal test`) and exhaustive pattern matching (`match`) to make the language highly robust.
+3. **Cross-Platform UI:** Lay the groundwork for the ultimate goal: a declarative, high-performance UI framework powered by a rendering engine like Skia.

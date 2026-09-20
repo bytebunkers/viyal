@@ -60,10 +60,10 @@ impl Formatter {
 
     fn format_decl(&mut self, decl: &Decl) {
         match decl {
-            Decl::Function(method) => {
+            Decl::Function(method, _) => {
                 self.format_method(method);
             }
-            Decl::Class { name, extends_class, implements_interfaces: _, fields, primary_constructor, methods } => {
+            Decl::Class { name, extends_class, implements_interfaces: _, fields, primary_constructor, methods, .. } => {
                 self.push(&format!("class {}", name));
                 
                 if !primary_constructor.is_empty() {
@@ -104,10 +104,20 @@ impl Formatter {
                 self.dedent();
                 self.push_line("}");
             }
-            Decl::TypeAlias { name, target_type } => {
+            Decl::TypeAlias { name, target_type, .. } => {
                 self.push(&format!("type {} = ", name));
                 self.format_type(target_type);
                 self.push_line(";");
+            }
+            Decl::Import { path, items } => {
+                let items_str = items.iter().map(|(n, a)| {
+                    if let Some(alias) = a {
+                        format!("{} as {}", n, alias)
+                    } else {
+                        n.clone()
+                    }
+                }).collect::<Vec<_>>().join(", ");
+                self.push_line(&format!("import {{ {} }} from \"{}\";", items_str, path));
             }
         }
     }
@@ -253,7 +263,7 @@ impl Formatter {
                 self.push(" ");
                 self.format_expr(&right.node);
             }
-            Expr::Call(callee, arguments) => {
+            Expr::Call(callee, _, arguments) => {
                 self.format_expr(&callee.node);
                 self.push("(");
                 for (i, arg) in arguments.iter().enumerate() {
@@ -277,7 +287,7 @@ impl Formatter {
                 self.push(" ?? ");
                 self.format_expr(&right.node);
             }
-            Expr::New(class_name, arguments) => {
+            Expr::New(class_name, _, arguments) => {
                 self.push(&format!("new {}(", class_name));
                 for (i, arg) in arguments.iter().enumerate() {
                     self.format_expr(&arg.node);
@@ -329,6 +339,32 @@ impl Formatter {
             }
             Expr::This => self.push("this"),
             Expr::Super => self.push("super"),
+            Expr::Match(target, arms) => {
+                self.push("match ");
+                self.format_expr(&target.node);
+                self.push_line(" {");
+                self.indent();
+                for (pat, arm_expr) in arms {
+                    match pat {
+                        ast::MatchPattern::Literal(lit) => {
+                            match lit {
+                                ast::Literal::Integer(i) => self.push(&i.to_string()),
+                                ast::Literal::Float(f) => self.push(&f.to_string()),
+                                ast::Literal::String(s) => self.push(&format!("\"{}\"", s)),
+                                ast::Literal::Boolean(b) => self.push(&b.to_string()),
+                                ast::Literal::Null => self.push("null"),
+                            }
+                        }
+                        ast::MatchPattern::Identifier(id) => self.push(id),
+                        ast::MatchPattern::CatchAll => self.push("_"),
+                    }
+                    self.push(" => ");
+                    self.format_expr(&arm_expr.node);
+                    self.push_line(",");
+                }
+                self.dedent();
+                self.push("}");
+            }
             Expr::Try(inner) => {
                 self.format_expr(&inner.node);
                 self.push("?");
@@ -343,7 +379,7 @@ impl Formatter {
 
     fn format_type(&mut self, ty: &Type) {
         match ty {
-            Type::Named(name) => self.push(name),
+            Type::Named(name, _) => self.push(name),
             Type::Array(inner) => {
                 self.format_type(inner);
                 self.push("[]");

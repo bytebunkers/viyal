@@ -1,0 +1,35 @@
+class Array<T> {
+    Any elements;
+    
+    Any constructor() {
+        this.elements = [];
+        return null;
+    }
+
+    Any push(T item) {
+        this.elements.push(item);
+        return null;
+    }
+    
+    T get(int index) {
+        return this.elements[index];
+    }
+}
+
+T identity<T>(T value) {
+    return value;
+}
+
+Any main() {
+    var arr = new Array();
+    arr.constructor();
+    arr.push(42);
+    arr.push(100);
+    
+    var first = arr.get(0);
+    print(first);
+    
+    var val = identity(99);
+    print(val);
+    return null;
+}

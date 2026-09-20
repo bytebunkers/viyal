@@ -10,6 +10,7 @@ members = [
     "compiler/optimizer",
     "compiler/bytecode",
     "compiler/codegen",
+    "compiler/backend",
     "runtime/gc",
     "runtime/async",
     "runtime/concurrency",

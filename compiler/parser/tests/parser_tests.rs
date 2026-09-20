@@ -15,23 +15,33 @@ fn test_simple_program() {
     
     assert_eq!(program.declarations.len(), 1);
     
-    if let Decl::Class { name, primary_constructor, methods, extends_class, implements_interfaces, fields } = &program.declarations[0].node {
+    if let Decl::Class { name, primary_constructor, methods, .. } = &program.declarations[0].node {
         assert_eq!(name, "Person");
         assert_eq!(primary_constructor.len(), 2);
         assert_eq!(primary_constructor[0].name, "name");
-        assert_eq!(primary_constructor[0].param_type, Type::Named("String".to_string()));
+        assert_eq!(
+            primary_constructor[0].param_type,
+            Type::Named("String".to_string(), vec![])
+        );
         
         assert_eq!(primary_constructor[1].name, "age");
-        assert_eq!(primary_constructor[1].param_type, Type::Named("int".to_string()));
+        assert_eq!(
+            primary_constructor[1].param_type,
+            Type::Named("int".to_string(), vec![])
+        );
         
         assert_eq!(methods.len(), 1);
         assert_eq!(methods[0].name, "greet");
-        assert_eq!(methods[0].return_type, Some(Type::Named("void".to_string())));
+        assert_eq!(
+            methods[0].return_type,
+            Some(Type::Named("void".to_string(), vec![]))
+        );
         
         if let Stmt::Block(stmts) = &methods[0].body.node {
             assert_eq!(stmts.len(), 1);
             if let Stmt::Expr(expr) = &stmts[0].node {
-                if let Expr::Call(target, args) = &expr.node {
+                // Expr::Call(callee, type_args, args)
+                if let Expr::Call(target, _type_args, args) = &expr.node {
                     if let Expr::Identifier(id) = &target.node {
                         assert_eq!(id, "print");
                     } else {

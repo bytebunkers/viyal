@@ -1,0 +1,16 @@
+[package]
+name = "backend"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+mir = { path = "../mir" }
+ast = { path = "../ast" }
+
+cranelift-codegen = { version = "0.115", features = ["x86"] }
+cranelift-frontend = { version = "0.115" }
+cranelift-module = { version = "0.115" }
+cranelift-jit = { version = "0.115" }
+cranelift-object = { version = "0.115" }
+cranelift-native = { version = "0.115" }
+target-lexicon = { version = "0.12" }

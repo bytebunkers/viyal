@@ -58,7 +58,7 @@ impl TypeEnv {
 
     pub fn resolve_type(&self, ty: &Type) -> Type {
         match ty {
-            Type::Named(name) => {
+            Type::Named(name, _) => {
                 if let Some(resolved) = self.type_aliases.get(name) {
                     self.resolve_type(resolved)
                 } else {

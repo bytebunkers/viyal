@@ -13,12 +13,12 @@ pub enum Expr {
     Literal(Literal),
     Identifier(String),
     Binary(Box<Spanned<Expr>>, BinaryOp, Box<Spanned<Expr>>),
-    Call(Box<Spanned<Expr>>, Vec<Spanned<Expr>>),
+    Call(Box<Spanned<Expr>>, Vec<Type>, Vec<Spanned<Expr>>),
     PropertyAccess(Box<Spanned<Expr>>, String),
     SafePropertyAccess(Box<Spanned<Expr>>, String),
     PropertyAssign(Box<Spanned<Expr>>, String, Box<Spanned<Expr>>),
     NullCoalesce(Box<Spanned<Expr>>, Box<Spanned<Expr>>),
-    New(String, Vec<Spanned<Expr>>),
+    New(String, Vec<Type>, Vec<Spanned<Expr>>),
     Array(Vec<Spanned<Expr>>),
     Index(Box<Spanned<Expr>>, Box<Spanned<Expr>>),
     IndexAssign(Box<Spanned<Expr>>, Box<Spanned<Expr>>, Box<Spanned<Expr>>),
@@ -27,6 +27,14 @@ pub enum Expr {
     UnwrapOrElse(Box<Spanned<Expr>>, Box<Spanned<Stmt>>),
     This,
     Super,
+    Match(Box<Spanned<Expr>>, Vec<(MatchPattern, Spanned<Expr>)>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum MatchPattern {
+    Literal(Literal),
+    Identifier(String), // Variable binding or enum variant
+    CatchAll,           // _
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -90,16 +98,23 @@ pub enum Stmt {
 pub enum Decl {
     Class {
         name: String,
+        type_params: Vec<String>,
         extends_class: Option<String>,
         implements_interfaces: Vec<String>,
         fields: Vec<Field>,
         primary_constructor: Vec<Param>,
         methods: Vec<Method>,
+        is_exported: bool,
     },
-    Function(Method),
+    Function(Method, bool), // (Method, is_exported)
     TypeAlias {
         name: String,
         target_type: Type,
+        is_exported: bool,
+    },
+    Import {
+        path: String,
+        items: Vec<(String, Option<String>)>, // (name, as alias)
     },
 }
 
@@ -114,6 +129,7 @@ pub struct Field {
 pub struct Method {
     pub return_type: Option<Type>,
     pub name: String,
+    pub type_params: Vec<String>,
     pub params: Vec<Param>,
     pub body: Spanned<Stmt>,
 }
@@ -126,12 +142,36 @@ pub struct Param {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Type {
-    Named(String),
+    Named(String, Vec<Type>),
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Nullable(Box<Type>),
     Result(Box<Type>),
     Option(Box<Type>),
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Named(name, args) => {
+                write!(f, "{}", name)?;
+                if !args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 { write!(f, ", ")?; }
+                        write!(f, "{}", arg)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            Type::Array(inner) => write!(f, "{}[]", inner),
+            Type::Map(k, v) => write!(f, "Map<{}, {}>", k, v),
+            Type::Nullable(inner) => write!(f, "{}?", inner),
+            Type::Result(inner) => write!(f, "Result<{}>", inner),
+            Type::Option(inner) => write!(f, "Option<{}>", inner),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

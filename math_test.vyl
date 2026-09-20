@@ -1,0 +1,17 @@
+class MathTest {
+    void test_addition() {
+        assertEq(1 + 1, 2);
+    }
+
+    void test_subtraction() {
+        assertEq(5 - 3, 2);
+    }
+
+    void test_boolean_assert() {
+        assert(true);
+    }
+
+    void test_failure() {
+        assertEq(10, 5); // This should fail!
+    }
+}

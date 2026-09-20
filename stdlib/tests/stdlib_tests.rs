@@ -19,7 +19,11 @@ fn test_stdlib_math_abs() {
     chunk.write(OpCode::OpCallNative(name_idx, 1), 1);
     chunk.write(OpCode::OpReturn, 1);
     
-    let mut vm = VM::new(chunk);
+    let program = bytecode::compiler::CompiledProgram {
+        main_chunk: chunk,
+        method_chunks: vec![],
+    };
+    let mut vm = VM::new(program);
     register_stdlib(&mut vm);
     
     let mut output = String::new();

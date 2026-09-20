@@ -10,6 +10,9 @@ pub fn format(source: &str) -> Result<String, String> {
             f.format_program(&program);
             Ok(f.into_string())
         }
-        Err(e) => Err(format!("Parse error: {}", e.message)),
+        Err(errors) => {
+            let messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+            Err(format!("Parse errors: {}", messages.join(", ")))
+        },
     }
 }

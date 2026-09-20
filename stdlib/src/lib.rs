@@ -19,6 +19,8 @@ pub fn register_stdlib(vm: &mut VM) {
     vm.register_native(NativeBinding::new("Math_pow", math::math_pow));
     vm.register_native(NativeBinding::new("print", io::print));
     vm.register_native(NativeBinding::new("readLine", io::read_line));
+    vm.register_native(NativeBinding::new("assert", io::assert));
+    vm.register_native(NativeBinding::new("assertEq", io::assert_eq));
 
     // math module
     vm.register_module("math", vec![

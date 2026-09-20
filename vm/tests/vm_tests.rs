@@ -15,7 +15,8 @@ fn test_vm_execution() {
     let add = Spanned { node: Expr::Binary(Box::new(left), BinaryOp::Add, Box::new(right)), span: 0..0 };
     
     let target = Spanned { node: Expr::Identifier("print".to_string()), span: 0..0 };
-    let call = Spanned { node: Expr::Call(Box::new(target), vec![add]), span: 0..0 };
+    let call = Spanned { node: Expr::Call(Box::new(target), vec![], vec![add]), span: 0..0 };
+
     
     compiler.compile_expr(&call).unwrap();
     let program = compiler.compile_finish();

@@ -9,19 +9,26 @@ use parser::Parser;
 use formatter::format;
 use analyzer::analyze;
 use bytecode::compiler::BytecodeCompiler;
+use bytecode::mir_compiler::MirBytecodeCompiler;
+use mir::builder::MirBuilder;
+use optimizer::optimize;
 use typechecker::TypeChecker;
+use resolver::ModuleLinker;
 use vm::vm::VM;
 use stdlib::register_stdlib;
+use ast::Decl;
+use std::path::PathBuf;
 
 fn print_usage() {
     println!("Viyal Language CLI");
     println!("Usage:");
     println!("  viyal new <name>         - Create a new Viyal project");
-    println!("  viyal run [file.vy]      - Run a Viyal program or project");
-    println!("  viyal debug <file.vy>    - Debug a Viyal program");
-    println!("  viyal build <file.vy>    - Build a Viyal program to an executable (requires C compiler)");
-    println!("  viyal format <file.vy>   - Format a Viyal program");
-    println!("  viyal analyze <file.vy>  - Run static analysis on a Viyal program");
+    println!("  viyal run [file.vyl]      - Run a Viyal program or project");
+    println!("  viyal test [file.vyl]     - Run tests in a Viyal program or project");
+    println!("  viyal debug <file.vyl>    - Debug a Viyal program");
+    println!("  viyal build <file.vyl>    - Build a Viyal program to an executable (requires C compiler)");
+    println!("  viyal format <file.vyl>   - Format a Viyal program");
+    println!("  viyal analyze <file.vyl>  - Run static analysis on a Viyal program");
     println!("  viyal lsp                - Start the Language Server");
 }
 fn span_to_line_col(source: &str, span_start: usize) -> (usize, usize) {
@@ -41,21 +48,14 @@ fn span_to_line_col(source: &str, span_start: usize) -> (usize, usize) {
     (line, col)
 }
 
-fn execute_file(file_path: &str) -> bool {
-    let source = match fs::read_to_string(file_path) {
-        Ok(s) => s,
-        Err(_) => {
-            eprintln!("Error: Could not read file {}", file_path);
-            return false;
-        }
-    };
+fn execute_file(file_path: &str, use_mir: bool) -> bool {
+    let source = fs::read_to_string(file_path).unwrap_or_default();
     
-    let mut parser = Parser::new(&source);
-    let program = match parser.parse_program() {
+    let mut linker = ModuleLinker::new();
+    let program = match linker.link(Path::new(file_path)) {
         Ok(p) => p,
         Err(e) => {
-            let (line, col) = span_to_line_col(&source, e.span.start);
-            eprintln!("Parse error at {}:{}:{} - {}", file_path, line, col, e.message);
+            eprintln!("Link/Parse error at {}: {}", e.path.display(), e.message);
             return false;
         }
     };
@@ -67,12 +67,27 @@ fn execute_file(file_path: &str) -> bool {
         return false;
     }
 
-    let compiler = BytecodeCompiler::new();
-    let chunk = match compiler.compile(&program) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Compile error: {}", e);
-            return false;
+    let chunk = if use_mir {
+        println!("[DEBUG] Compiling with MIR & Optimizations");
+        let mir_builder = MirBuilder::new();
+        let mut mir_program = mir_builder.build(&program);
+        mir_program = optimize(mir_program);
+        let compiler = MirBytecodeCompiler::new();
+        match compiler.compile(&mir_program) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("MIR Compile error: {}", e);
+                return false;
+            }
+        }
+    } else {
+        let compiler = BytecodeCompiler::new();
+        match compiler.compile(&program) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Compile error: {}", e);
+                return false;
+            }
         }
     };
 
@@ -98,6 +113,105 @@ fn execute_file(file_path: &str) -> bool {
             true
         }
     }
+}
+
+fn execute_tests(file_path: &str) -> bool {
+    let source = fs::read_to_string(file_path).unwrap_or_default();
+    
+    let mut linker = ModuleLinker::new();
+    let program = match linker.link(Path::new(file_path)) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Link/Parse error at {}: {}", e.path.display(), e.message);
+            return false;
+        }
+    };
+    
+    let mut tests = Vec::new();
+    for decl in program.declarations {
+        if let Decl::Class { name, methods, .. } = decl.node {
+            for method in methods {
+                if method.name.starts_with("test_") && method.params.is_empty() {
+                    tests.push((name.clone(), method.name.clone()));
+                }
+            }
+        }
+    }
+    
+    if tests.is_empty() {
+        println!("No tests found in {}", file_path);
+        return true;
+    }
+    
+    println!("running {} tests", tests.len());
+    
+    let mut passed = 0;
+    let mut failed = 0;
+    
+    for (class_name, method_name) in tests {
+        print!("test {}.{} ... ", class_name, method_name);
+        
+        let synthetic_src = format!("
+class __TestRunner {{
+    void run() {{
+        var t = new {}();
+        t.{}();
+    }}
+}}", class_name, method_name);
+        
+        let full_src = format!("{}\n{}", source, synthetic_src);
+        
+        let mut test_parser = Parser::new(&full_src);
+        let test_program = match test_parser.parse_program() {
+            Ok(p) => p,
+            Err(_) => {
+                println!("FAILED (Internal test parsing error)");
+                failed += 1;
+                continue;
+            }
+        };
+        
+        let mut tc = TypeChecker::new();
+        if let Err(e) = tc.check_program(&test_program) {
+            println!("FAILED (Type error: {})", e.message);
+            failed += 1;
+            continue;
+        }
+        
+        let compiler = BytecodeCompiler::new();
+        let chunk = match compiler.compile(&test_program) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("FAILED (Compile error: {})", e);
+                failed += 1;
+                continue;
+            }
+        };
+        
+        let mut vm = VM::new(chunk);
+        register_stdlib(&mut vm);
+        
+        let mut output = String::new();
+        match vm.run(&mut output) {
+            vm::vm::InterpretResult::Ok => {
+                println!("ok");
+                passed += 1;
+            }
+            vm::vm::InterpretResult::RuntimeError(msg) => {
+                println!("FAILED ({})", msg);
+                failed += 1;
+            }
+            _ => {
+                println!("FAILED (Unknown Error)");
+                failed += 1;
+            }
+        }
+    }
+    
+    let status = if failed == 0 { "ok" } else { "FAILED" };
+    println!("\ntest result: {}. {} passed; {} failed; 0 ignored;", status, passed, failed);
+    
+    failed == 0
 }
 
 fn main() {
@@ -140,7 +254,7 @@ fn main() {
             let file_path = if file_args.len() > 0 {
                 file_args[0].clone()
             } else {
-                // Try to find viyal.toml and run src/main.vy
+                // Try to find viyal.toml and run src/main.vyl
                 match pub_tool::find_project_root() {
                     Ok(root) => {
                         let manifest_path = root.join("viyal.toml");
@@ -149,9 +263,9 @@ fn main() {
                             process::exit(1);
                         });
                         println!("Running project `{}` v{}", manifest.package.name, manifest.package.version);
-                        let main_file = root.join("src").join("main.vy");
+                        let main_file = root.join("src").join("main.vyl");
                         if !main_file.exists() {
-                            eprintln!("Error: src/main.vy not found in project.");
+                            eprintln!("Error: src/main.vyl not found in project.");
                             process::exit(1);
                         }
                         main_file.to_string_lossy().to_string()
@@ -164,7 +278,7 @@ fn main() {
                 }
             };
 
-            execute_file(&file_path);
+            execute_file(&file_path, args.contains(&"--optimize".to_string()));
 
             if watch_mode {
                 let watch_path = match pub_tool::find_project_root() {
@@ -189,7 +303,7 @@ fn main() {
                                 // Clear terminal for a fresh output
                                 print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
                                 println!("Change detected, reloading...");
-                                execute_file(&file_path);
+                                execute_file(&file_path, false);
                                 println!("Waiting for changes...");
                             }
                         }
@@ -198,22 +312,45 @@ fn main() {
                 }
             }
         }
+        "test" => {
+            let file_path = if args.len() > 2 {
+                args[2].clone()
+            } else {
+                // For MVP, look for src/main.vyl if no file provided
+                match pub_tool::find_project_root() {
+                    Ok(root) => {
+                        let main_file = root.join("src").join("main.vyl");
+                        if !main_file.exists() {
+                            eprintln!("Error: src/main.vyl not found in project.");
+                            process::exit(1);
+                        }
+                        main_file.to_string_lossy().to_string()
+                    }
+                    Err(e) => {
+                        eprintln!("Error: Missing file path for 'test' and not in a Viyal project.");
+                        eprintln!("{}", e);
+                        process::exit(1);
+                    }
+                }
+            };
+            let success = execute_tests(&file_path);
+            if !success {
+                process::exit(1);
+            }
+        }
         "debug" => {
             if args.len() < 3 {
                 eprintln!("Error: Missing file path for 'debug'");
                 process::exit(1);
             }
             let file_path = &args[2];
-            let source = fs::read_to_string(file_path).unwrap_or_else(|_| {
-                eprintln!("Error: Could not read file {}", file_path);
-                process::exit(1);
-            });
+            let source = fs::read_to_string(file_path).unwrap_or_default();
             
-            let mut parser = Parser::new(&source);
-            let program = match parser.parse_program() {
+            let mut linker = ModuleLinker::new();
+            let program = match linker.link(Path::new(file_path)) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Parse error: {}", e.message);
+                    eprintln!("Link error at {}: {}", e.path.display(), e.message);
                     process::exit(1);
                 }
             };
@@ -286,17 +423,14 @@ fn main() {
                 process::exit(1);
             }
             let file_path = &args[2];
-            let source = fs::read_to_string(file_path).unwrap_or_else(|_| {
-                eprintln!("Error: Could not read file {}", file_path);
-                process::exit(1);
-            });
+            let is_release = args.contains(&"--release".to_string());
+            let source = fs::read_to_string(file_path).unwrap_or_default();
             
-            let mut parser = Parser::new(&source);
-            let program = match parser.parse_program() {
+            let mut linker = ModuleLinker::new();
+            let program = match linker.link(Path::new(file_path)) {
                 Ok(p) => p,
                 Err(e) => {
-                    let (line, col) = span_to_line_col(&source, e.span.start);
-                    eprintln!("Parse error at {}:{}:{} - {}", file_path, line, col, e.message);
+                    eprintln!("Link error at {}: {}", e.path.display(), e.message);
                     process::exit(1);
                 }
             };
@@ -308,42 +442,62 @@ fn main() {
                 process::exit(1);
             }
 
-            match codegen::generate_c(&program) {
-                Ok(c_code) => {
-                    let c_file = ".viyal_out.c";
-                    fs::write(c_file, &c_code).expect("Failed to write temporary C file");
-                    
-                    println!("Compiling {} to native binary...", file_path);
-                    
-                    // Simple MVP compilation using gcc
-                    // In a real scenario, this would detect gcc/clang/msvc
-                    let output = process::Command::new("gcc")
-                        .arg(c_file)
-                        .arg("-o")
-                        .arg("output.exe")
-                        .output();
-                        
-                    match output {
-                        Ok(res) if res.status.success() => {
-                            println!("Build successful: output.exe");
-                        }
-                        Ok(res) => {
-                            eprintln!("C Compiler Error:");
-                            eprintln!("{}", String::from_utf8_lossy(&res.stderr));
-                            process::exit(1);
-                        }
-                        Err(e) => {
-                            eprintln!("Error: C compiler (gcc) not found or failed to execute: {}", e);
-                            eprintln!("Viyal's optional AOT backend requires a C compiler. Please install GCC or use `viyal run` instead.");
-                            process::exit(1);
-                        }
+            if is_release {
+                // ── Cranelift AOT path ─────────────────────────────────────
+                println!("Building {} (release) via Cranelift AOT...", file_path);
+                let mir_builder = MirBuilder::new();
+                let mut mir_program = mir_builder.build(&program);
+                mir_program = optimize(mir_program);
+
+                let out_path = Path::new(file_path)
+                    .file_stem()
+                    .map(|s| PathBuf::from(s))
+                    .unwrap_or_else(|| PathBuf::from("output"));
+
+                match backend::compile_aot(&mir_program, &out_path) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("AOT build error: {}", e);
+                        process::exit(1);
                     }
-                    
-                    let _ = fs::remove_file(c_file);
                 }
-                Err(e) => {
-                    eprintln!("Codegen error: {}", e);
-                    process::exit(1);
+            } else {
+                // ── Legacy C codegen path (fast, no linker deps) ────────────
+                match codegen::generate_c(&program) {
+                    Ok(c_code) => {
+                        let c_file = ".viyal_out.c";
+                        fs::write(c_file, &c_code).expect("Failed to write temporary C file");
+                        
+                        println!("Compiling {} to native binary...", file_path);
+                        
+                        let output = process::Command::new("gcc")
+                            .arg(c_file)
+                            .arg("-o")
+                            .arg("output.exe")
+                            .output();
+                            
+                        match output {
+                            Ok(res) if res.status.success() => {
+                                println!("Build successful: output.exe");
+                            }
+                            Ok(res) => {
+                                eprintln!("C Compiler Error:");
+                                eprintln!("{}", String::from_utf8_lossy(&res.stderr));
+                                process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: C compiler (gcc) not found or failed to execute: {}", e);
+                                eprintln!("Tip: Use `viyal build {} --release` for the dependency-free Cranelift AOT backend.", file_path);
+                                process::exit(1);
+                            }
+                        }
+                        
+                        let _ = fs::remove_file(c_file);
+                    }
+                    Err(e) => {
+                        eprintln!("Codegen error: {}", e);
+                        process::exit(1);
+                    }
                 }
             }
         }
