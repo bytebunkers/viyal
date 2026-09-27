@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Viyal Programming Language Documentation" />
+    <title>Documentation - Viyal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="logo">
+        <a href="index.html" style="text-decoration: none; display: flex; align-items: center; gap: 0.75rem; color: inherit;">
+          <div class="logo-icon">V</div>
+          Viyal
+        </a>
+      </div>
+      <div class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#syntax">Syntax</a>
+        <a href="docs.html" class="active" style="color: var(--primary);">Documentation</a>
+        <a href="https://github.com/bytebunkers/viyal/releases" target="_blank" class="btn-primary-small">Download v0.1.0</a>
+      </div>
+    </nav>
+
+    <!-- Docs Layout -->
+    <div class="docs-layout">
+      <aside class="docs-sidebar">
+        <div class="docs-search">
+          <input type="text" id="searchInput" placeholder="Search docs..." />
+        </div>
+        <h3>Contents</h3>
+        <ul id="sidebarMenu">
+          <li><a href="#installation">1. Installation & Usage</a></li>
+          <li><a href="#overview">2. Syntax Overview</a></li>
+          <li><a href="#variables">3. Variables & Declarations</a></li>
+          <li><a href="#types">4. Core Types</a></li>
+          <li><a href="#null-safety">5. Null Safety</a></li>
+          <li><a href="#functions">6. Functions</a></li>
+          <li><a href="#oop">7. Object-Oriented Features</a></li>
+          <li><a href="#control-flow">8. Control Flow</a></li>
+          <li><a href="#examples">9. Examples</a></li>
+          <li><a href="#stdlib">10. Standard Library</a></li>
+          <li><a href="#concurrency">11. Concurrency Model</a></li>
+          <li><a href="#compiler">12. Compiler Architecture</a></li>
+          <li><a href="#contributing">13. Contributing</a></li>
+          <li><a href="#setup">14. Compiler Setup Guide</a></li>
+        </ul>
+      </aside>
+
+      <main class="docs-content">
+        <h1>Viyal Language Specification</h1>
+        <p>This is the authoritative MVP specification for the Viyal programming language (Phase M0).</p>
+
+        <section id="installation">
+          <h2>1. Installation & Usage</h2>
+          <p>You can download the pre-compiled binaries for your operating system directly from our GitHub releases page.</p>
+          
+          <h3>Download Links</h3>
+          <ul>
+            <li><a href="https://github.com/bytebunkers/viyal/releases" target="_blank" style="color: var(--primary);">Windows Release (.zip)</a></li>
+            <li><a href="https://github.com/bytebunkers/viyal/releases" target="_blank" style="color: var(--primary);">Linux Release (.tar.gz)</a></li>
+          </ul>
+
+          <h3>Setup Instructions</h3>
+          <p><strong>For Windows:</strong></p>
+          <ol>
+            <li>Download and extract the <code>.zip</code> file to a folder (e.g., <code>C:\viyal</code>).</li>
+            <li>Add the extracted folder to your system's <code>PATH</code> environment variable.</li>
+            <li>Open a new command prompt or PowerShell window and verify the installation by running <code>viyal --version</code>.</li>
+          </ol>
+
+          <p><strong>For Linux:</strong></p>
+          <ol>
+            <li>Download the <code>.tar.gz</code> archive.</li>
+            <li>Extract the archive: <code>tar -xzf viyal-linux.tar.gz</code></li>
+            <li>Move the binary to your local bin directory: <code>sudo mv viyal /usr/local/bin/</code></li>
+            <li>Verify the installation by running <code>viyal --version</code>.</li>
+          </ol>
+
+          <h3>Executing a Script</h3>
+          <p>Create a file named <code>hello.vyl</code> with the following content:</p>
+          <pre><code class="language-c">void main() {
+    print("Hello from Viyal!");
+}</code></pre>
+          <p>Run the script using the Viyal compiler:</p>
+          <pre><code class="language-bash">viyal hello.vyl</code></pre>
+        </section>
+
+        <section id="overview">
+          <h2>2. Syntax Overview</h2>
+          <p>The language uses a strict C-style syntax with expression-oriented capabilities where appropriate, maintaining a balance between familiarity and modern ergonomics.</p>
+          <pre><code class="language-c">class Person(String name, int age) {
+    void greet() {
+        print("Hello $name");
+    }
+}
+
+void main() {
+    final person = Person("Raja", 25);
+    person.greet();
+}</code></pre>
+        </section>
+
+        <section id="variables">
+          <h2>3. Variables and Declarations</h2>
+          <ul>
+            <li><code>final</code>: Immutable reference (value cannot be reassigned).</li>
+            <li><code>var</code>: Mutable reference (type inferred).</li>
+            <li>Type annotations can precede the variable name.</li>
+          </ul>
+          <pre><code class="language-c">String name = "Raja";
+var age = 25;
+final score = 98.5;</code></pre>
+        </section>
+
+        <section id="types">
+          <h2>4. Core Types</h2>
+          <ul>
+            <li><code>int</code>: 64-bit signed integer.</li>
+            <li><code>double</code>: 64-bit floating point.</li>
+            <li><code>bool</code>: <code>true</code> or <code>false</code>.</li>
+            <li><code>String</code>: UTF-8 encoded string.</li>
+            <li>Collections: <code>List&lt;T&gt;</code>, <code>Set&lt;T&gt;</code>, <code>Map&lt;K, V&gt;</code>.</li>
+          </ul>
+        </section>
+
+        <section id="null-safety">
+          <h2>5. Null Safety</h2>
+          <p>Null safety is baked into the type system. Types are non-nullable by default.</p>
+          <ul>
+            <li><code>T</code> is non-nullable.</li>
+            <li><code>T?</code> is nullable.</li>
+          </ul>
+          <pre><code class="language-c">String name = "Raja"; // Valid
+String? nickname = null; // Valid
+// String invalid = null; // Compiler Error</code></pre>
+          <p>Control flow analysis performs smart casting:</p>
+          <pre><code class="language-c">if (nickname != null) {
+    print(nickname.length); // nickname is treated as String here
+}</code></pre>
+        </section>
+
+        <section id="functions">
+          <h2>6. Functions</h2>
+          <p>Functions support positional, named, default, and optional parameters.</p>
+          <pre><code class="language-c">int add(int a, int b) {
+    return a + b;
+}
+
+final multiply = (int a, int b) =&gt; a * b;</code></pre>
+        </section>
+
+        <section id="oop">
+          <h2>7. Object-Oriented Features</h2>
+          <ul>
+            <li>Classes with primary constructors (e.g., <code>class Point(int x, int y)</code>).</li>
+            <li>Interfaces declared explicitly (<code>interface Logger { ... }</code>).</li>
+            <li>Abstract classes for partial implementations.</li>
+            <li>No implicit interfaces (unlike Dart).</li>
+          </ul>
+        </section>
+
+        <section id="control-flow">
+          <h2>8. Control Flow</h2>
+          <p>Standard C-style constructs:</p>
+          <ul>
+            <li><code>if</code> / <code>else</code></li>
+            <li><code>for</code> (C-style and <code>for-in</code>)</li>
+            <li><code>while</code> / <code>do-while</code></li>
+            <li><code>switch</code> (exhaustive by default on enums and sealed classes)</li>
+          </ul>
+        </section>
+
+        <section id="examples">
+          <h2>9. Examples</h2>
+          <p>Here are a few quick examples demonstrating Viyal's syntax and features in action.</p>
+          
+          <h3>Working with Arrays</h3>
+          <pre><code class="language-c">class Main {
+    void run() {
+        var arr = [10, 20, 30];
+        print(arr[0]);
+        print(arr[1]);
+        
+        arr[1] = 99;
+        print(arr[1]); // 99
+    }
+}</code></pre>
+
+          <h3>Working with Maps</h3>
+          <pre><code class="language-c">class Main {
+    void run() {
+        var myMap = {"name": "Viyal", "version": "1.0"};
+        print(myMap["name"]);
+        
+        myMap["version"] = "1.1";
+        myMap["new_key"] = "hello";
+        
+        print(myMap["new_key"]);
+    }
+}</code></pre>
+
+          <h3>Classes and Methods</h3>
+          <pre><code class="language-c">class Animal {
+    void speak() {
+        print("Roar!");
+    }
+}
+
+class Main {
+    void run() {
+        new Animal().speak();
+    }
+}</code></pre>
+        </section>
+
+        <section id="stdlib">
+          <h2>10. Standard Library</h2>
+          <p>Viyal includes a comprehensive standard library out of the box, optimized for performance and ease of use.</p>
+          
+          <h3><code>fs</code> (File System)</h3>
+          <p>Read and write files synchronously or asynchronously.</p>
+          <pre><code class="language-c">import { readFile } from "fs";
+var content = await readFile("data.txt");</code></pre>
+
+          <h3><code>http</code> (Networking)</h3>
+          <p>Build web servers or make HTTP requests effortlessly.</p>
+          <pre><code class="language-c">import { get } from "http";
+var response = await get("https://api.github.com");</code></pre>
+
+          <h3><code>json</code></h3>
+          <p>Native JSON parsing and serialization.</p>
+          <pre><code class="language-c">var data = json.parse('{"key": "value"}');</code></pre>
+
+          <h3><code>math</code> &amp; <code>str</code></h3>
+          <p>Extensive utilities for mathematical operations and string manipulations (like regex matching, splitting, formatting).</p>
+        </section>
+
+        <section id="concurrency">
+          <h2>11. Concurrency Model</h2>
+          <p>Viyal features <strong>Structured Concurrency</strong>, inspired by Kotlin and Swift, avoiding the pitfalls of unstructured Futures/Promises.</p>
+          
+          <h3>Hierarchical Scopes</h3>
+          <p>Async tasks are strictly bound to a hierarchical scope. A task cannot outlive its parent scope, ensuring no leaked coroutines.</p>
+          <pre><code class="language-c">async void fetchAll() {
+    scope {
+        task { fetchUsers(); }
+        task { fetchProducts(); }
+    } // Blocks until all tasks complete.
+}</code></pre>
+          <ul>
+            <li><strong>Cancellation:</strong> If a parent scope is cancelled, all child tasks are automatically cancelled.</li>
+            <li><strong>Error Propagation:</strong> If a child task fails, the error bubbles up, cancelling siblings automatically to prevent wasted work.</li>
+            <li><strong>Channels:</strong> Go-style channels are available for safe communication between concurrent tasks.</li>
+          </ul>
+        </section>
+
+        <section id="compiler">
+          <h2>12. Compiler Architecture</h2>
+          <p>The Viyal compiler is written in <strong>Rust</strong> to leverage its performance, memory safety, and mature compiler toolchain.</p>
+          
+          <h3>Pipeline Overview</h3>
+          <pre><code class="language-text">Source Code
+     ↓ (Lexer)
+Tokens
+     ↓ (Parser)
+AST (Abstract Syntax Tree)
+     ↓ (Resolver)
+Resolved AST
+     ↓ (Type Checker)
+Typed AST
+     ↓ (Lowering)
+HIR (High-Level Intermediate Representation)
+     ↓ (Optimization / Lowering)
+MIR (Mid-Level Intermediate Representation)
+     ↓
+ ┌───────────────┬───────────────┐
+ │               │               │
+Bytecode IR      LLVM IR       WASM IR
+ │               │               │
+ VM            Native Executable   Browser</code></pre>
+
+          <h3>Components</h3>
+          <ul>
+            <li><strong>Lexer:</strong> Converts raw source text into a stream of Tokens. Handles whitespace, comments, and string interpolation boundaries.</li>
+            <li><strong>Parser:</strong> Consumes Tokens to produce an Abstract Syntax Tree (AST). Recovers from errors gracefully to support IDE features (LSP).</li>
+            <li><strong>Resolver & Type Checker:</strong> Binds identifiers to declarations, enforces null safety and type rules, and performs type inference.</li>
+            <li><strong>HIR & MIR:</strong> High-level concepts (classes, async/await) are lowered into simpler representations (structs, state machines). Enables optimizations independent of the final target (Bytecode vs Native).</li>
+          </ul>
+        </section>
+
+        <section id="contributing">
+          <h2>13. Contributing</h2>
+          <p>Viyal is an open-source project and we welcome contributions from the community! Whether you're interested in compiler design, standard library development, or writing documentation, there's a place for you.</p>
+          
+          <h3>How to Contribute</h3>
+          <ul>
+            <li><strong>Report Bugs:</strong> Open an issue on our GitHub repository with a clear description and steps to reproduce.</li>
+            <li><strong>Suggest Features:</strong> We are currently in Phase M0 (Research). Feel free to open a discussion for language features.</li>
+            <li><strong>Submit Pull Requests:</strong>
+              <ol>
+                <li>Fork the repository.</li>
+                <li>Create a new branch for your feature or bug fix.</li>
+                <li>Write tests for your changes.</li>
+                <li>Ensure all existing tests pass.</li>
+                <li>Submit your PR with a detailed description of the changes.</li>
+              </ol>
+            </li>
+          </ul>
+          
+          <h3>Development Environment</h3>
+          <p>Since the compiler is written in Rust, you will need the standard Rust toolchain (<code>cargo</code> and <code>rustc</code>). Detailed instructions on building the compiler from source can be found in the repository's README.</p>
+        </section>
+
+        <section id="setup">
+          <h2>14. Compiler Setup Guide</h2>
+          <p>Follow these steps to build the Viyal compiler from source and start contributing.</p>
+          
+          <h3>Prerequisites</h3>
+          <ul>
+            <li><strong>Rust Toolchain:</strong> You need <code>rustc</code> and <code>cargo</code>. The easiest way to install them is via <a href="https://rustup.rs/" target="_blank" style="color: var(--primary);">rustup</a>.</li>
+            <li><strong>Git:</strong> To clone the repository.</li>
+          </ul>
+
+          <h3>Build Instructions</h3>
+          <p>1. Clone the repository:</p>
+          <pre><code class="language-bash">git clone https://github.com/bytebunkers/viyal.git
+cd viyal</code></pre>
+          
+          <p>2. Build the compiler:</p>
+          <pre><code class="language-bash">cargo build --release</code></pre>
+          
+          <p>3. Run the test suite to ensure everything is working correctly:</p>
+          <pre><code class="language-bash">cargo test</code></pre>
+          
+          <p>4. Run the compiler against a Viyal source file:</p>
+          <pre><code class="language-bash">cargo run -- hello.vyl</code></pre>
+        </section>
+        
+      </main>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-content">
+        <div class="logo">
+          <div class="logo-icon">V</div>
+          Viyal
+        </div>
+        <p>&copy; 2026 Viyal Programming Language. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script type="module" src="./docs.js"></script>
+  </body>
+</html>
