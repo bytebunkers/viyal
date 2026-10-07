@@ -20,11 +20,11 @@ impl MirBytecodeCompiler {
     pub fn compile(mut self, program: &MirProgram) -> Result<CompiledProgram, String> {
         let mut has_main = false;
 
-        for (class_name, method_names) in &program.classes {
+        for (class_name, mir_class) in &program.classes {
             let name_idx = self.chunk.add_constant(Value::String(class_name.clone()));
             self.chunk.write(OpCode::OpClass(name_idx), 1);
 
-            for method_name in method_names {
+            for method_name in &mir_class.methods {
                 let full_name = format!("{}::{}", class_name, method_name);
                 if let Some(func) = program.functions.get(&full_name) {
                     let mut func_compiler = MirBytecodeCompiler::new();

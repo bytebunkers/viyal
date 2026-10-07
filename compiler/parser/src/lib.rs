@@ -467,6 +467,13 @@ impl<'a> Parser<'a> {
                 false
             };
             let name = self.consume_identifier("Expected variable name")?;
+            
+            let mut type_annot = None;
+            if self.check(&Token::Colon) {
+                self.advance();
+                type_annot = Some(self.parse_type()?);
+            }
+
             let mut initializer = None;
             if self.check(&Token::Eq) {
                 self.advance();
@@ -476,7 +483,7 @@ impl<'a> Parser<'a> {
             return Ok(Spanned {
                 node: Stmt::VarDecl {
                     is_final,
-                    type_annot: None,
+                    type_annot,
                     name,
                     initializer,
                 },

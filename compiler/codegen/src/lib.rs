@@ -48,6 +48,7 @@ impl CGenerator {
         for decl in &program.declarations {
             if let Decl::Class { name, .. } = &decl.node {
                 writeln!(&mut self.output, "struct {};", name).unwrap();
+                writeln!(&mut self.output, "struct {}* {}_new();", name, name).unwrap();
             }
         }
         self.output.push_str("\n");
@@ -105,6 +106,8 @@ impl CGenerator {
                     if name == "Main" && method.name == "run" {
                         self.output.push_str("int main() {\n");
                         self.indent_level += 1;
+                        self.push_indent();
+                        self.output.push_str("struct Main* this = Main_new();\n");
                         self.visit_stmt(&method.body.node)?;
                         self.push_indent();
                         self.output.push_str("return 0;\n");
@@ -131,27 +134,25 @@ impl CGenerator {
                 }
 
                 // Generate Constructor Allocator (_new)
-                if name != "Main" {
-                    writeln!(&mut self.output, "struct {0}* {0}_new() {{", name).unwrap();
+                writeln!(&mut self.output, "struct {0}* {0}_new() {{", name).unwrap();
+                writeln!(
+                    &mut self.output,
+                    "    struct {0}* obj = calloc(1, sizeof(struct {0}));",
+                    name
+                )
+                .unwrap();
+                for method in methods {
+                    if method.name == "run" {
+                        continue;
+                    }
                     writeln!(
                         &mut self.output,
-                        "    struct {0}* obj = calloc(1, sizeof(struct {0}));",
-                        name
+                        "    obj->{1} = {0}_impl_{1};",
+                        name, method.name
                     )
                     .unwrap();
-                    for method in methods {
-                        if method.name == "run" {
-                            continue;
-                        }
-                        writeln!(
-                            &mut self.output,
-                            "    obj->{1} = {0}_impl_{1};",
-                            name, method.name
-                        )
-                        .unwrap();
-                    }
-                    writeln!(&mut self.output, "    return obj;\n}}\n").unwrap();
                 }
+                writeln!(&mut self.output, "    return obj;\n}}\n").unwrap();
             }
             Decl::Function(method, _) => {
                 let ret_type = method

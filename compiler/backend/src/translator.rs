@@ -56,18 +56,21 @@ pub struct FunctionTranslator<'a> {
     vars: HashMap<usize, Variable>,
     /// Maps `mir::BasicBlock` id → Cranelift `Block`.
     blocks: HashMap<usize, Block>,
-    /// Pre-declared FuncIds for all functions (populated by Pass 1).
+    /// Pre-declared FuncRefs for all functions (populated by Pass 1 and `module.declare_func_in_func`).
     /// Used to emit cross-function call instructions.
-    func_ids: HashMap<String, FuncId>,
+    func_refs: HashMap<String, cranelift_codegen::ir::FuncRef>,
+    /// Access to the full program for struct size/field offset lookups.
+    pub mir_program: &'a MirProgram,
 }
 
 impl<'a> FunctionTranslator<'a> {
-    pub fn new(builder: FunctionBuilder<'a>, func_ids: HashMap<String, FuncId>) -> Self {
+    pub fn new(builder: FunctionBuilder<'a>, func_refs: HashMap<String, cranelift_codegen::ir::FuncRef>, mir_program: &'a MirProgram) -> Self {
         Self {
             builder,
             vars: HashMap::new(),
             blocks: HashMap::new(),
-            func_ids,
+            func_refs,
+            mir_program,
         }
     }
 
@@ -111,7 +114,7 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.switch_to_block(cl_block);
             }
             for stmt in &bb.statements {
-                self.translate_stmt(stmt);
+                self.translate_stmt(stmt, mir_fn);
             }
             self.translate_terminator(&bb.terminator, mir_fn);
         }
@@ -122,10 +125,10 @@ impl<'a> FunctionTranslator<'a> {
 
     // ─── Statement ───────────────────────────────────────────────────────────
 
-    fn translate_stmt(&mut self, stmt: &Statement) {
+    fn translate_stmt(&mut self, stmt: &Statement, mir_fn: &MirFunction) {
         match stmt {
             Statement::Assign(local, rvalue) => {
-                let val = self.translate_rvalue(rvalue);
+                let val = self.translate_rvalue(rvalue, mir_fn);
                 let var = Variable::from_u32(local.0 as u32);
                 self.builder.def_var(var, val);
             }
@@ -134,7 +137,7 @@ impl<'a> FunctionTranslator<'a> {
 
     // ─── Rvalue ──────────────────────────────────────────────────────────────
 
-    fn translate_rvalue(&mut self, rvalue: &Rvalue) -> Value {
+    fn translate_rvalue(&mut self, rvalue: &Rvalue, mir_fn: &MirFunction) -> Value {
         match rvalue {
             Rvalue::Use(operand) => self.translate_operand(operand),
 
@@ -146,15 +149,29 @@ impl<'a> FunctionTranslator<'a> {
                     BinaryOp::Sub => self.builder.ins().isub(l, r),
                     BinaryOp::Mul => self.builder.ins().imul(l, r),
                     BinaryOp::Div => self.builder.ins().sdiv(l, r),
-                    BinaryOp::Eq => self.builder.ins().icmp(IntCC::Equal, l, r),
-                    BinaryOp::NotEq => self.builder.ins().icmp(IntCC::NotEqual, l, r),
-                    BinaryOp::Less => self.builder.ins().icmp(IntCC::SignedLessThan, l, r),
-                    BinaryOp::Greater => self.builder.ins().icmp(IntCC::SignedGreaterThan, l, r),
-                    BinaryOp::LessEq => self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, l, r),
+                    BinaryOp::Eq => {
+                        let res = self.builder.ins().icmp(IntCC::Equal, l, r);
+                        self.builder.ins().uextend(types::I64, res)
+                    }
+                    BinaryOp::NotEq => {
+                        let res = self.builder.ins().icmp(IntCC::NotEqual, l, r);
+                        self.builder.ins().uextend(types::I64, res)
+                    }
+                    BinaryOp::Less => {
+                        let res = self.builder.ins().icmp(IntCC::SignedLessThan, l, r);
+                        self.builder.ins().uextend(types::I64, res)
+                    }
+                    BinaryOp::Greater => {
+                        let res = self.builder.ins().icmp(IntCC::SignedGreaterThan, l, r);
+                        self.builder.ins().uextend(types::I64, res)
+                    }
+                    BinaryOp::LessEq => {
+                        let res = self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, l, r);
+                        self.builder.ins().uextend(types::I64, res)
+                    }
                     BinaryOp::GreaterEq => {
-                        self.builder
-                            .ins()
-                            .icmp(IntCC::SignedGreaterThanOrEqual, l, r)
+                        let res = self.builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, l, r);
+                        self.builder.ins().uextend(types::I64, res)
                     }
                     BinaryOp::Assign => r,
                 }
@@ -178,27 +195,8 @@ impl<'a> FunctionTranslator<'a> {
                     _ => return self.builder.ins().iconst(types::I64, 0),
                 };
 
-                if let Some(&func_id) = self.func_ids.get(&callee_name) {
-                    // For MVP we just use the caller's signature as a template for the callee.
-                    // A full implementation would look up the exact callee signature.
-                    let sig = self.builder.func.signature.clone();
-                    let sig_ref = self.builder.import_signature(sig);
-
-                    let func_ref =
-                        self.builder
-                            .func
-                            .dfg
-                            .ext_funcs
-                            .push(cranelift_codegen::ir::ExtFuncData {
-                                name: cranelift_codegen::ir::ExternalName::user(
-                                    cranelift_codegen::ir::UserExternalNameRef::from_u32(
-                                        func_id.as_u32(),
-                                    ),
-                                ),
-                                signature: sig_ref,
-                                colocated: true,
-                            });
-                    let arg_vals: Vec<Value> =
+                if let Some(&func_ref) = self.func_refs.get(&callee_name) {
+                    let mut arg_vals: Vec<Value> =
                         args.iter().map(|a| self.translate_operand(a)).collect();
                     let call = self.builder.ins().call(func_ref, &arg_vals);
                     let results = self.builder.inst_results(call);
@@ -214,8 +212,111 @@ impl<'a> FunctionTranslator<'a> {
                 }
             }
 
-            // Higher-level rvalues (Array, Map, New, MethodCall, etc.) are emitted
-            // as zero placeholders for the MVP — will be runtime-call-lowered in v0.2.
+            Rvalue::MethodCall(obj, method_name, args) => {
+                let class_name = if let Operand::Copy(local) = obj {
+                    if let Type::Named(name, _) = &mir_fn.locals[local.0].ty {
+                        name.clone()
+                    } else {
+                        "Main".to_string()
+                    }
+                } else {
+                    "Main".to_string()
+                };
+
+                let callee_name = format!("{}::{}", class_name, method_name);
+                if let Some(&func_ref) = self.func_refs.get(&callee_name) {
+                    let mut arg_vals: Vec<Value> = vec![self.translate_operand(obj)];
+                    arg_vals.extend(args.iter().map(|a| self.translate_operand(a)));
+                    
+                    let call = self.builder.ins().call(func_ref, &arg_vals);
+                    let results = self.builder.inst_results(call);
+                    if results.is_empty() {
+                        self.builder.ins().iconst(types::I64, 0)
+                    } else {
+                        results[0]
+                    }
+                } else {
+                    self.builder.ins().iconst(types::I64, 0)
+                }
+            }
+
+            Rvalue::New(class_name, args) => {
+                if let Some(class) = self.mir_program.classes.get(class_name) {
+                    let size = class.fields.len() as i64 * 8;
+                    let size_val = self.builder.ins().iconst(types::I64, size);
+                    
+                    if let Some(&malloc_ref) = self.func_refs.get("malloc") {
+                        let call = self.builder.ins().call(malloc_ref, &[size_val]);
+                        let ptr = self.builder.inst_results(call)[0];
+                        
+                        // Initialize fields with args (if mapped 1:1)
+                        for (i, arg) in args.iter().enumerate() {
+                            if i < class.fields.len() {
+                                let arg_val = self.translate_operand(arg);
+                                let offset = (i * 8) as i32;
+                                self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), arg_val, ptr, offset);
+                            }
+                        }
+                        ptr
+                    } else {
+                        self.builder.ins().iconst(types::I64, 0)
+                    }
+                } else {
+                    self.builder.ins().iconst(types::I64, 0)
+                }
+            }
+            Rvalue::PropertyAccess(obj, prop) => {
+                let ptr = self.translate_operand(obj);
+                
+                let class_name = if let Operand::Copy(local) = obj {
+                    if let Type::Named(name, _) = &mir_fn.locals[local.0].ty {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                
+                if let Some(class_name) = class_name {
+                    if let Some(class) = self.mir_program.classes.get(&class_name) {
+                        if let Some(idx) = class.fields.iter().position(|f| f == prop) {
+                            let offset = (idx * 8) as i32;
+                            return self.builder.ins().load(types::I64, cranelift_codegen::ir::MemFlags::trusted(), ptr, offset);
+                        }
+                    }
+                }
+                
+                self.builder.ins().iconst(types::I64, 0)
+            }
+            Rvalue::PropertyAssign(obj, prop, val_op) => {
+                let ptr = self.translate_operand(obj);
+                let val = self.translate_operand(val_op);
+                
+                let class_name = if let Operand::Copy(local) = obj {
+                    if let Type::Named(name, _) = &mir_fn.locals[local.0].ty {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                
+                if let Some(class_name) = class_name {
+                    if let Some(class) = self.mir_program.classes.get(&class_name) {
+                        if let Some(idx) = class.fields.iter().position(|f| f == prop) {
+                            let offset = (idx * 8) as i32;
+                            self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), val, ptr, offset);
+                            return val;
+                        }
+                    }
+                }
+                
+                self.builder.ins().iconst(types::I64, 0)
+            }
+            // Higher-level rvalues (Array, Map) are emitted
+            // as zero placeholders for the MVP.
             _ => self.builder.ins().iconst(types::I64, 0),
         }
     }
@@ -333,6 +434,7 @@ pub fn compile_mir_function<M: Module>(
     ctx: &mut Context,
     mir_fn: &MirFunction,
     func_ids: &HashMap<String, FuncId>,
+    program: &MirProgram,
 ) -> Result<FuncId, String> {
     let func_id = *func_ids
         .get(&mir_fn.name)
@@ -352,9 +454,15 @@ pub fn compile_mir_function<M: Module>(
 
     ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
 
+    let mut func_refs = HashMap::new();
+    for (name, &id) in func_ids {
+        let func_ref = module.declare_func_in_func(id, &mut ctx.func);
+        func_refs.insert(name.clone(), func_ref);
+    }
+
     {
         let builder = FunctionBuilder::new(&mut ctx.func, fb_ctx);
-        let translator = FunctionTranslator::new(builder, func_ids.clone());
+        let translator = FunctionTranslator::new(builder, func_refs, program);
         translator.translate(mir_fn);
     }
 
@@ -377,6 +485,22 @@ pub fn compile_mir_program<M: Module>(
 ) -> Result<HashMap<String, FuncId>, String> {
     // Pass 1 — declare all signatures.
     let mut func_ids: HashMap<String, FuncId> = HashMap::new();
+    
+    // Builtin: print
+    let mut print_sig = module.make_signature();
+    print_sig.params.push(cranelift_codegen::ir::AbiParam::new(types::I64));
+    print_sig.returns.push(cranelift_codegen::ir::AbiParam::new(types::I64));
+    if let Ok(print_id) = module.declare_function("print", cranelift_module::Linkage::Import, &print_sig) {
+        func_ids.insert("print".to_string(), print_id);
+    }
+    // Builtin: malloc
+    let mut malloc_sig = module.make_signature();
+    malloc_sig.params.push(cranelift_codegen::ir::AbiParam::new(types::I64));
+    malloc_sig.returns.push(cranelift_codegen::ir::AbiParam::new(types::I64));
+    if let Ok(malloc_id) = module.declare_function("malloc", cranelift_module::Linkage::Import, &malloc_sig) {
+        func_ids.insert("malloc".to_string(), malloc_id);
+    }
+
     for (name, mir_fn) in &program.functions {
         let fid = declare_mir_function(module, mir_fn)?;
         func_ids.insert(name.clone(), fid);
@@ -384,7 +508,7 @@ pub fn compile_mir_program<M: Module>(
 
     // Pass 2 — compile all bodies (all signatures now known).
     for mir_fn in program.functions.values() {
-        compile_mir_function(module, fb_ctx, ctx, mir_fn, &func_ids)?;
+        compile_mir_function(module, fb_ctx, ctx, mir_fn, &func_ids, program)?;
     }
 
     Ok(func_ids)

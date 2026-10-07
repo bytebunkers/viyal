@@ -1,5 +1,5 @@
 use crate::ir::*;
-use ast::{Decl, Expr, MatchPattern, Program, Spanned, Stmt, Type};
+use ast::{Decl, Expr, MatchPattern, Program, Stmt, Type};
 use std::collections::HashMap;
 
 pub struct MirBuilder {
@@ -7,6 +7,12 @@ pub struct MirBuilder {
     current_func: Option<MirFunction>,
     current_block: usize,
     env: HashMap<String, Local>,
+}
+
+impl Default for MirBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MirBuilder {
@@ -23,6 +29,48 @@ impl MirBuilder {
         for decl in &ast_program.declarations {
             self.visit_decl(&decl.node);
         }
+
+        // MVP Entry Point Generation
+        if self.program.functions.contains_key("Main::run") {
+            let mut main_func = MirFunction::new("main".to_string(), Some(Type::Named("int".to_string(), vec![])));
+            
+            let obj_local = Local(0);
+            main_func.locals.push(LocalDecl {
+                ty: Type::Named("Main".to_string(), vec![]),
+                name: Some("main_obj".to_string()),
+                is_mut: false,
+            });
+            
+            let mut block = BasicBlock {
+                id: 0,
+                phis: Vec::new(),
+                statements: Vec::new(),
+                terminator: Terminator::Unreachable,
+            };
+            
+            block.statements.push(Statement::Assign(
+                obj_local,
+                Rvalue::New("Main".to_string(), Vec::new()),
+            ));
+            
+            let call_res = Local(1);
+            main_func.locals.push(LocalDecl {
+                ty: Type::Named("Any".to_string(), vec![]),
+                name: Some("res".to_string()),
+                is_mut: false,
+            });
+            
+            block.statements.push(Statement::Assign(
+                call_res,
+                Rvalue::MethodCall(Operand::Copy(obj_local), "run".to_string(), Vec::new()),
+            ));
+            
+            block.terminator = Terminator::Return { value: Some(Operand::Constant(ast::Literal::Integer(0))) };
+            main_func.basic_blocks.push(block);
+            
+            self.program.functions.insert("main".to_string(), main_func);
+        }
+
         self.program
     }
 
@@ -68,8 +116,14 @@ impl MirBuilder {
                 self.program.functions.insert(func.name.clone(), func);
             }
             Decl::TypeAlias { .. } | Decl::Import { .. } => {}
-            Decl::Class { name, methods, .. } => {
+            Decl::Class { name, fields, methods, .. } => {
                 let mut class_methods = Vec::new();
+                let mut class_fields = Vec::new();
+                
+                for field in fields {
+                    class_fields.push(field.name.clone());
+                }
+                
                 for method in methods {
                     let method_name = method.name.clone();
                     class_methods.push(method_name.clone());
@@ -121,9 +175,12 @@ impl MirBuilder {
                     }
                     self.program.functions.insert(func.name.clone(), func);
                 }
-                self.program.classes.insert(name.clone(), class_methods);
+                self.program.classes.insert(name.clone(), MirClass {
+                    name: name.clone(),
+                    fields: class_fields,
+                    methods: class_methods,
+                });
             }
-            _ => {} // Skip TypeAlias for now
         }
     }
 
@@ -198,11 +255,7 @@ impl MirBuilder {
                 self.current_block = merge_block_id;
             }
             Stmt::Return(opt_expr) => {
-                let ret_val = if let Some(expr) = opt_expr {
-                    Some(self.visit_expr(&expr.node))
-                } else {
-                    None
-                };
+                let ret_val = opt_expr.as_ref().map(|expr| self.visit_expr(&expr.node));
                 self.set_terminator(Terminator::Return { value: ret_val });
                 // We create a new unreachable block just in case there are statements after return
                 let new_block = self.new_block();
@@ -396,7 +449,6 @@ impl MirBuilder {
                 // exit
                 self.current_block = exit_block_id;
             }
-            _ => {} // Fallback for any other statement
         }
     }
 
@@ -525,7 +577,7 @@ impl MirBuilder {
                 let merge_block_id = self.new_block();
 
                 for (pattern, expr) in arms {
-                    let test_block_id = self.current_block;
+                    let _test_block_id = self.current_block;
                     let body_block_id = self.new_block();
                     let next_test_block_id = self.new_block();
 

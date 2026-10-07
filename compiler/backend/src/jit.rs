@@ -27,7 +27,7 @@ pub fn execute_jit(program: &MirProgram) -> Result<i64, String> {
     //    (x86_64, AArch64, etc.) and enables all available CPU features.
     let mut flag_builder = settings::builder();
     // "opt_level none" → skip optimizations for maximum JIT compilation speed.
-    flag_builder.set("opt_level", "none").unwrap();
+    flag_builder.set("opt_level", "speed").unwrap();
     let isa_builder = cranelift_native::builder()
         .map_err(|e| format!("Failed to detect host ISA for JIT: {}", e))?;
     let isa = isa_builder
@@ -35,7 +35,15 @@ pub fn execute_jit(program: &MirProgram) -> Result<i64, String> {
         .map_err(|e| format!("Failed to build ISA: {}", e))?;
 
     // 2. Create the JIT module.
-    let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+    let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+    
+    // Register `print` builtin for benchmarks
+    extern "C" fn print_i64(val: i64) -> i64 {
+        println!("{}", val);
+        0
+    }
+    builder.symbol("print", print_i64 as *const u8);
+    
     let mut module = JITModule::new(builder);
 
     // 3. Shared builder contexts (re-used across all functions for efficiency).

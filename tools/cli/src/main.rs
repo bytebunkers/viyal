@@ -50,7 +50,7 @@ fn span_to_line_col(source: &str, span_start: usize) -> (usize, usize) {
     (line, col)
 }
 
-fn execute_file(file_path: &str, use_mir: bool) -> bool {
+fn execute_file(file_path: &str, use_mir: bool, use_jit: bool) -> bool {
     let source = fs::read_to_string(file_path).unwrap_or_default();
 
     let mut linker = ModuleLinker::new();
@@ -70,6 +70,23 @@ fn execute_file(file_path: &str, use_mir: bool) -> bool {
             file_path, line, col, e.message
         );
         return false;
+    }
+
+    if use_jit {
+        println!("[DEBUG] Executing with Cranelift JIT");
+        let mir_builder = MirBuilder::new();
+        let mut mir_program = mir_builder.build(&program);
+        mir_program = optimize(mir_program);
+        match backend::jit::execute_jit(&mir_program) {
+            Ok(res) => {
+                println!("{}", res);
+                return true;
+            }
+            Err(e) => {
+                eprintln!("JIT Execution Error: {}", e);
+                return false;
+            }
+        }
     }
 
     let chunk = if use_mir {
@@ -275,6 +292,8 @@ fn main() {
             for arg in args.iter().skip(2) {
                 if arg == "--watch" {
                     watch_mode = true;
+                } else if arg == "--optimize" || arg == "--jit" {
+                    continue;
                 } else {
                     file_args.push(arg.clone());
                 }
@@ -311,7 +330,7 @@ fn main() {
                 }
             };
 
-            execute_file(&file_path, args.contains(&"--optimize".to_string()));
+            execute_file(&file_path, args.contains(&"--optimize".to_string()), args.contains(&"--jit".to_string()));
 
             if watch_mode {
                 let watch_path = match pub_tool::find_project_root() {
@@ -342,7 +361,7 @@ fn main() {
                                 // Clear terminal for a fresh output
                                 print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
                                 println!("Change detected, reloading...");
-                                execute_file(&file_path, false);
+                                execute_file(&file_path, false, false);
                                 println!("Waiting for changes...");
                             }
                         }
@@ -459,16 +478,29 @@ fn main() {
             }
         }
         "build" => {
-            if args.len() < 3 {
+            let mut file_path = String::new();
+            let mut is_release = false;
+            let mut use_clang = false;
+
+            for arg in args.iter().skip(2) {
+                if arg == "--release" {
+                    is_release = true;
+                } else if arg == "--clang" {
+                    use_clang = true;
+                } else {
+                    file_path = arg.clone();
+                }
+            }
+
+            if file_path.is_empty() {
                 eprintln!("Error: Missing file path for 'build'");
                 process::exit(1);
             }
-            let file_path = &args[2];
-            let is_release = args.contains(&"--release".to_string());
-            let source = fs::read_to_string(file_path).unwrap_or_default();
+            
+            let source = fs::read_to_string(&file_path).unwrap_or_default();
 
             let mut linker = ModuleLinker::new();
-            let program = match linker.link(Path::new(file_path)) {
+            let program = match linker.link(Path::new(&file_path)) {
                 Ok(p) => p,
                 Err(e) => {
                     eprintln!("Link error at {}: {}", e.path.display(), e.message);
@@ -487,33 +519,20 @@ fn main() {
             }
 
             if is_release {
-                // ── Cranelift AOT path ─────────────────────────────────────
-                println!("Building {} (release) via Cranelift AOT...", file_path);
-                let mir_builder = MirBuilder::new();
-                let mut mir_program = mir_builder.build(&program);
-                mir_program = optimize(mir_program);
-
-                let out_path = Path::new(file_path)
-                    .file_stem()
-                    .map(|s| PathBuf::from(s))
-                    .unwrap_or_else(|| PathBuf::from("output"));
-
-                match backend::compile_aot(&mir_program, &out_path) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        eprintln!("AOT build error: {}", e);
-                        process::exit(1);
-                    }
-                }
+                use_clang = true;
+                println!("Building {} (release) via Clang C Codegen...", file_path);
             } else {
-                // ── Legacy C codegen path (fast, no linker deps) ────────────
-                match codegen::generate_c(&program) {
-                    Ok(c_code) => {
-                        let c_file = ".viyal_out.c";
-                        fs::write(c_file, &c_code).expect("Failed to write temporary C file");
+                println!("Compiling {} to native binary...", file_path);
+            }
 
-                        println!("Compiling {} to native binary...", file_path);
-
+            // ── C codegen path ────────────
+            match codegen::generate_c(&program) {
+                Ok(c_code) => {
+                    let c_file = ".viyal_out.c";
+                    fs::write(c_file, &c_code).expect("Failed to write temporary C file");
+                    
+                    let use_clang = use_clang || args.contains(&"--clang".to_string());
+                        
                         let bundled_tcc = match pub_tool::find_project_root() {
                             Ok(root) => root
                                 .join("vendor")
@@ -524,17 +543,24 @@ fn main() {
                             Err(_) => "vendor/tcc/tcc.exe".to_string(),
                         };
 
-                        let compilers = [bundled_tcc.as_str(), "tcc", "gcc", "clang", "cl"];
+                        let compilers = if use_clang {
+                            vec!["clang"]
+                        } else {
+                            vec![bundled_tcc.as_str(), "tcc", "gcc", "clang", "cl"]
+                        };
+                        
                         let mut output = None;
                         let mut used_compiler = "";
 
                         for cc in compilers {
-                            if let Ok(res) = process::Command::new(cc)
-                                .arg(c_file)
-                                .arg("-o")
-                                .arg("output.exe")
-                                .output()
-                            {
+                            let mut cmd = process::Command::new(cc);
+                            cmd.arg(c_file);
+                            if use_clang {
+                                cmd.arg("-O3");
+                            }
+                            cmd.arg("-o").arg("output.exe");
+                            
+                            if let Ok(res) = cmd.output() {
                                 output = Some(res);
                                 used_compiler = cc;
                                 break;
@@ -570,7 +596,6 @@ fn main() {
                     }
                 }
             }
-        }
         "lsp" => {
             if let Err(e) = lsp::start_server() {
                 eprintln!("LSP server error: {}", e);

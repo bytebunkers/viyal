@@ -120,9 +120,17 @@ impl MirFunction {
     }
 }
 
+/// A class representation in MIR tracking fields and methods
+#[derive(Debug, Clone)]
+pub struct MirClass {
+    pub name: String,
+    pub fields: Vec<String>,
+    pub methods: Vec<String>,
+}
+
 /// The entire MIR representation of a program
 #[derive(Debug, Clone, Default)]
 pub struct MirProgram {
     pub functions: HashMap<String, MirFunction>,
-    pub classes: HashMap<String, Vec<String>>,
+    pub classes: HashMap<String, MirClass>,
 }
