@@ -2,7 +2,7 @@ use crate::chunk::Chunk;
 use crate::compiler::CompiledProgram;
 use crate::opcode::OpCode;
 use interpreter::value::Value;
-use mir::ir::{BasicBlock, Local, MirFunction, MirProgram, Operand, Rvalue, Statement, Terminator};
+use mir::ir::{Local, MirFunction, MirProgram, Operand, Rvalue, Statement, Terminator};
 
 pub struct MirBytecodeCompiler {
     pub chunk: Chunk,
@@ -236,7 +236,7 @@ impl MirBytecodeCompiler {
                         for arg in args {
                             self.compile_operand(arg)?;
                         }
-                        if let Operand::Copy(Local(idx)) = func {
+                        if let Operand::Copy(Local(_idx)) = func {
                             return Err("MIR dynamic calls not fully supported yet".to_string());
                         } else if let Operand::Constant(ast::Literal::String(name)) = func {
                             if name == "print" {
@@ -292,6 +292,12 @@ impl MirBytecodeCompiler {
                         self.compile_operand(idx)?;
                         self.chunk.write(OpCode::OpIndex, 1);
                     }
+                    Rvalue::IndexAssign(arr, idx, val) => {
+                        self.compile_operand(arr)?;
+                        self.compile_operand(idx)?;
+                        self.compile_operand(val)?;
+                        self.chunk.write(OpCode::OpIndexSet, 1);
+                    }
                     Rvalue::Try(inner) => {
                         self.compile_operand(inner)?;
                         self.chunk.write(OpCode::OpTry, 1);
@@ -304,7 +310,6 @@ impl MirBytecodeCompiler {
                         self.chunk
                             .write(OpCode::OpConstruct(class_idx, args.len() as u8), 1);
                     }
-                    _ => return Err(format!("Unsupported Rvalue in MIR: {:?}", rvalue)),
                 }
 
                 // Store result in local

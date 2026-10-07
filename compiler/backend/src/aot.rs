@@ -82,7 +82,7 @@ pub fn compile_aot(program: &MirProgram, output_path: &Path) -> Result<(), Strin
         output_path.to_path_buf()
     };
 
-    let linker_status = link_object_file(&obj_path, &exe_path)?;
+    let _linker_status = link_object_file(&obj_path, &exe_path)?;
 
     // 7. Clean up the intermediate `.o` file.
     let _ = std::fs::remove_file(&obj_path);

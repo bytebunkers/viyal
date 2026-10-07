@@ -1,5 +1,4 @@
-use ast::Type;
-use mir::ir::{BasicBlock, Local, LocalDecl, MirFunction, Operand, Rvalue, Statement, Terminator};
+use mir::ir::{Local, LocalDecl, MirFunction, Operand, Rvalue, Statement};
 use std::collections::HashMap;
 
 /// Eliminates Phi nodes by inserting Move operations at the end of predecessor blocks.

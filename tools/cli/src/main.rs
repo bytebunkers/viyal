@@ -14,7 +14,6 @@ use mir::builder::MirBuilder;
 use optimizer::optimize;
 use parser::Parser;
 use resolver::ModuleLinker;
-use std::path::PathBuf;
 use stdlib::register_stdlib;
 use typechecker::TypeChecker;
 use vm::vm::VM;
@@ -404,7 +403,7 @@ fn main() {
                 process::exit(1);
             }
             let file_path = &args[2];
-            let source = fs::read_to_string(file_path).unwrap_or_default();
+            let _source = fs::read_to_string(file_path).unwrap_or_default();
 
             let mut linker = ModuleLinker::new();
             let program = match linker.link(Path::new(file_path)) {

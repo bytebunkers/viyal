@@ -20,7 +20,6 @@ use cranelift_codegen::Context;
 use cranelift_codegen::ir::{
     AbiParam, Block, Function, InstBuilder, UserFuncName, Value, condcodes::IntCC, types,
 };
-use cranelift_codegen::settings::Configurable;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_module::{FuncId, Linkage, Module};
 
@@ -196,7 +195,7 @@ impl<'a> FunctionTranslator<'a> {
                 };
 
                 if let Some(&func_ref) = self.func_refs.get(&callee_name) {
-                    let mut arg_vals: Vec<Value> =
+                    let arg_vals: Vec<Value> =
                         args.iter().map(|a| self.translate_operand(a)).collect();
                     let call = self.builder.ins().call(func_ref, &arg_vals);
                     let results = self.builder.inst_results(call);
@@ -315,7 +314,80 @@ impl<'a> FunctionTranslator<'a> {
                 
                 self.builder.ins().iconst(types::I64, 0)
             }
-            // Higher-level rvalues (Array, Map) are emitted
+            Rvalue::Array(elements) => {
+                let len = elements.len() as i64;
+                let size_bytes = 8 + len * 8; // 8 bytes for length, plus elements
+                if let Some(&malloc_ref) = self.func_refs.get("malloc") {
+                    let size_val = self.builder.ins().iconst(types::I64, size_bytes);
+                    let call = self.builder.ins().call(malloc_ref, &[size_val]);
+                    let ptr = self.builder.inst_results(call)[0];
+                    
+                    // store length at offset 0
+                    let len_val = self.builder.ins().iconst(types::I64, len);
+                    self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), len_val, ptr, 0);
+                    
+                    // store elements
+                    for (i, el) in elements.iter().enumerate() {
+                        let el_val = self.translate_operand(el);
+                        let offset = 8 + (i as i32) * 8;
+                        self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), el_val, ptr, offset);
+                    }
+                    ptr
+                } else {
+                    self.builder.ins().iconst(types::I64, 0)
+                }
+            }
+            Rvalue::Map(pairs) => {
+                let len = pairs.len() as i64;
+                let size_bytes = 8 + len * 16; // length + (key, value) pairs
+                if let Some(&malloc_ref) = self.func_refs.get("malloc") {
+                    let size_val = self.builder.ins().iconst(types::I64, size_bytes);
+                    let call = self.builder.ins().call(malloc_ref, &[size_val]);
+                    let ptr = self.builder.inst_results(call)[0];
+                    
+                    let len_val = self.builder.ins().iconst(types::I64, len);
+                    self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), len_val, ptr, 0);
+                    
+                    for (i, (k, v)) in pairs.iter().enumerate() {
+                        let k_val = self.translate_operand(k);
+                        let v_val = self.translate_operand(v);
+                        let offset_k = 8 + (i as i32) * 16;
+                        let offset_v = 8 + (i as i32) * 16 + 8;
+                        self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), k_val, ptr, offset_k);
+                        self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), v_val, ptr, offset_v);
+                    }
+                    ptr
+                } else {
+                    self.builder.ins().iconst(types::I64, 0)
+                }
+            }
+            Rvalue::Index(arr, idx) => {
+                let ptr = self.translate_operand(arr);
+                let idx_val = self.translate_operand(idx);
+                // Compute address: ptr + 8 + idx_val * 8
+                // Note: For MVP, we assume it's an Array. A Map would require a linear scan loop in Cranelift.
+                let eight = self.builder.ins().iconst(types::I64, 8);
+                let offset = self.builder.ins().imul(idx_val, eight);
+                let ptr_plus_offset = self.builder.ins().iadd(ptr, offset);
+                self.builder.ins().load(types::I64, cranelift_codegen::ir::MemFlags::trusted(), ptr_plus_offset, 8)
+            }
+            Rvalue::IndexAssign(arr, idx, val_op) => {
+                let ptr = self.translate_operand(arr);
+                let idx_val = self.translate_operand(idx);
+                let val = self.translate_operand(val_op);
+                
+                let eight = self.builder.ins().iconst(types::I64, 8);
+                let offset = self.builder.ins().imul(idx_val, eight);
+                let ptr_plus_offset = self.builder.ins().iadd(ptr, offset);
+                
+                self.builder.ins().store(cranelift_codegen::ir::MemFlags::trusted(), val, ptr_plus_offset, 8);
+                val
+            }
+            Rvalue::Length(arr) => {
+                let ptr = self.translate_operand(arr);
+                self.builder.ins().load(types::I64, cranelift_codegen::ir::MemFlags::trusted(), ptr, 0)
+            }
+            // Higher-level rvalues are emitted
             // as zero placeholders for the MVP.
             _ => self.builder.ins().iconst(types::I64, 0),
         }

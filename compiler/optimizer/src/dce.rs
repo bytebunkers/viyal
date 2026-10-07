@@ -1,4 +1,4 @@
-use mir::ir::{BasicBlock, MirFunction, MirProgram, Operand, Statement, Terminator};
+use mir::ir::{MirFunction, MirProgram, Terminator};
 use std::collections::HashSet;
 
 pub fn eliminate_dead_code_program(mut program: MirProgram) -> MirProgram {

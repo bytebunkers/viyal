@@ -1,4 +1,4 @@
-use mir::ir::{BasicBlock, Local, MirFunction, Operand, Rvalue, Statement};
+use mir::ir::{Local, MirFunction, Operand, Rvalue, Statement};
 use std::collections::HashMap;
 
 /// Performs Global Value Numbering (GVN) / Common Subexpression Elimination (CSE).
@@ -48,6 +48,7 @@ fn is_pure(rvalue: &Rvalue) -> bool {
         | Rvalue::Map(_)
         | Rvalue::New(_, _)
         | Rvalue::PropertyAssign(_, _, _)
+        | Rvalue::IndexAssign(_, _, _)
         | Rvalue::Try(_) => false,
     }
 }

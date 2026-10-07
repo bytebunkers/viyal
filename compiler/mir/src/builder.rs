@@ -687,6 +687,28 @@ impl MirBuilder {
                     panic!("'this' used outside of a method");
                 }
             }
+            Expr::Index(array, index) => {
+                let array_op = self.visit_expr(&array.node);
+                let index_op = self.visit_expr(&index.node);
+                let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
+                self.add_statement(Statement::Assign(
+                    local,
+                    Rvalue::Index(array_op, index_op),
+                ));
+                Operand::Copy(local)
+            }
+            Expr::IndexAssign(array, index, value) => {
+                let array_op = self.visit_expr(&array.node);
+                let index_op = self.visit_expr(&index.node);
+                let val_op = self.visit_expr(&value.node);
+
+                let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
+                self.add_statement(Statement::Assign(
+                    local,
+                    Rvalue::IndexAssign(array_op, index_op, val_op),
+                ));
+                Operand::Copy(local)
+            }
             _ => {
                 // Fallback placeholder
                 Operand::Constant(ast::Literal::Null)

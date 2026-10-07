@@ -1,5 +1,5 @@
-use mir::ir::{BasicBlock, MirFunction, Terminator};
-use std::collections::{HashMap, HashSet};
+use mir::ir::{MirFunction, Terminator};
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct Cfg {

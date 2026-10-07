@@ -540,7 +540,7 @@ impl BytecodeCompiler {
                             self.chunk.write(OpCode::OpJump(0), line);
                             jump_ends.push(end_jump);
                         }
-                        ast::MatchPattern::Identifier(id) => {
+                        ast::MatchPattern::Identifier(_id) => {
                             // Binding identifier! We need to create a local variable block, but since MVP doesn't have
                             // nested blocks cleanly setting locals for arms, we will treat it as a CatchAll for now!
                             // (Typechecker already verified no bindings are used).

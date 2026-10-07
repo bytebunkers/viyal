@@ -1,0 +1,4 @@
+void main() {
+    mut m = {"a": 10, "b": 20};
+    print(m["a"]);
+}

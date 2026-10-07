@@ -62,6 +62,8 @@ pub enum Rvalue {
     Length(Operand),
     /// Array/Map indexing (e.g., arr[i])
     Index(Operand, Operand),
+    /// Array/Map index assignment (e.g., arr[i] = val)
+    IndexAssign(Operand, Operand, Operand),
     /// Try operator (e.g., try expr)
     Try(Operand),
     /// Object allocation (e.g., new Class(args))

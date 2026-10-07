@@ -1,5 +1,5 @@
 use ast::{BinaryOp, Literal};
-use mir::ir::{BasicBlock, Local, MirFunction, Operand, Rvalue, Statement, Terminator};
+use mir::ir::{Local, MirFunction, Operand, Rvalue, Statement, Terminator};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -341,6 +341,11 @@ fn extract_uses(rvalue: &Rvalue, uses: &mut HashMap<usize, Vec<usize>>, block_id
             add_use(op1);
             add_use(op2);
         }
+        Rvalue::IndexAssign(op1, op2, op3) => {
+            add_use(op1);
+            add_use(op2);
+            add_use(op3);
+        }
         Rvalue::BinaryOp(_, op1, op2) | Rvalue::Index(op1, op2) => {
             add_use(op1);
             add_use(op2);
@@ -393,6 +398,11 @@ fn uses_local(rvalue: &Rvalue, local: usize) -> bool {
             check_use(op1);
             check_use(op2);
         }
+        Rvalue::IndexAssign(op1, op2, op3) => {
+            check_use(op1);
+            check_use(op2);
+            check_use(op3);
+        }
         Rvalue::BinaryOp(_, op1, op2) | Rvalue::Index(op1, op2) => {
             check_use(op1);
             check_use(op2);
@@ -430,7 +440,7 @@ fn uses_local(rvalue: &Rvalue, local: usize) -> bool {
 }
 
 fn replace_constants(rvalue: &mut Rvalue, values: &[Lattice]) {
-    let mut replace = |op: &mut Operand| {
+    let replace = |op: &mut Operand| {
         if let Operand::Copy(Local(l)) = op {
             if let Lattice::Constant(lit) = &values[*l] {
                 *op = Operand::Constant(lit.clone());
@@ -444,6 +454,11 @@ fn replace_constants(rvalue: &mut Rvalue, values: &[Lattice]) {
         Rvalue::PropertyAssign(op1, _, op2) => {
             replace(op1);
             replace(op2);
+        }
+        Rvalue::IndexAssign(op1, op2, op3) => {
+            replace(op1);
+            replace(op2);
+            replace(op3);
         }
         Rvalue::BinaryOp(_, op1, op2) | Rvalue::Index(op1, op2) => {
             replace(op1);

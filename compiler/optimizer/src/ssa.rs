@@ -1,6 +1,6 @@
 use crate::cfg::Cfg;
 use mir::ir::{
-    BasicBlock, Local, LocalDecl, MirFunction, Operand, Phi, Rvalue, Statement, Terminator,
+    Local, LocalDecl, MirFunction, Operand, Phi, Rvalue, Statement, Terminator,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -188,6 +188,11 @@ impl<'a> SsaRenamer<'a> {
             Rvalue::PropertyAssign(op1, _, op2) => {
                 self.rename_operand(op1);
                 self.rename_operand(op2);
+            }
+            Rvalue::IndexAssign(op1, op2, op3) => {
+                self.rename_operand(op1);
+                self.rename_operand(op2);
+                self.rename_operand(op3);
             }
             Rvalue::BinaryOp(_, op1, op2) | Rvalue::Index(op1, op2) => {
                 self.rename_operand(op1);
