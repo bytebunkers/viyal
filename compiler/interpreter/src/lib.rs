@@ -1,5 +1,5 @@
-pub mod value;
 pub mod environment;
+pub mod value;
 
 use ast::*;
 use environment::Environment;
@@ -43,7 +43,7 @@ impl<'a> Interpreter<'a> {
                 for method in methods {
                     self.execute_stmt(&method.body.node)?;
                 }
-            },
+            }
             Decl::Function(method, _) => {
                 self.execute_stmt(&method.body.node)?;
             }
@@ -58,15 +58,15 @@ impl<'a> Interpreter<'a> {
         match stmt {
             Stmt::Expr(expr) => {
                 self.evaluate(&expr.node)?;
-            },
+            }
             Stmt::Block(stmts) => {
                 for s in stmts {
                     self.execute_stmt(&s.node)?;
                 }
-            },
+            }
             Stmt::VarDecl { .. } => {
-                // Not fully implemented for MVP
-            },
+                return Err(RuntimeError("Unsupported statement: VarDecl".to_string()));
+            }
             _ => return Err(RuntimeError("Unsupported statement".to_string())),
         }
         Ok(())
@@ -74,14 +74,12 @@ impl<'a> Interpreter<'a> {
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         match expr {
-            Expr::Literal(lit) => {
-                match lit {
-                    Literal::String(s) => Ok(Value::String(s.clone())),
-                    Literal::Integer(i) => Ok(Value::Integer(*i)),
-                    Literal::Float(f) => Ok(Value::Float(*f)),
-                    Literal::Boolean(b) => Ok(Value::Boolean(*b)),
-                    Literal::Null => Ok(Value::Null),
-                }
+            Expr::Literal(lit) => match lit {
+                Literal::String(s) => Ok(Value::String(s.clone())),
+                Literal::Integer(i) => Ok(Value::Integer(*i)),
+                Literal::Float(f) => Ok(Value::Float(*f)),
+                Literal::Boolean(b) => Ok(Value::Boolean(*b)),
+                Literal::Null => Ok(Value::Null),
             },
             Expr::Call(target, _, args) => {
                 // Hardcode built-in 'print' function
@@ -96,21 +94,21 @@ impl<'a> Interpreter<'a> {
                     }
                 }
                 Err(RuntimeError("Unsupported call".to_string()))
-            },
+            }
             Expr::Identifier(name) => {
                 if let Some(val) = self.env.get(name) {
                     Ok(val)
                 } else {
                     Err(RuntimeError(format!("Undefined variable '{}'", name)))
                 }
-            },
+            }
             Expr::New(_class_name, _, _args) => {
                 // Mock object creation
                 Ok(Value::Void)
-            },
+            }
             Expr::PropertyAccess(_target, _field) | Expr::SafePropertyAccess(_target, _field) => {
                 Ok(Value::Void)
-            },
+            }
             Expr::NullCoalesce(left, right) => {
                 let left_val = self.evaluate(&left.node)?;
                 if left_val == Value::Null {
@@ -118,7 +116,7 @@ impl<'a> Interpreter<'a> {
                 } else {
                     Ok(left_val)
                 }
-            },
+            }
             Expr::This | Expr::Super => Ok(Value::Void),
             _ => Err(RuntimeError("Unsupported expression".to_string())),
         }

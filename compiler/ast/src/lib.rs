@@ -158,7 +158,9 @@ impl std::fmt::Display for Type {
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
-                        if i > 0 { write!(f, ", ")?; }
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
                         write!(f, "{}", arg)?;
                     }
                     write!(f, ">")?;

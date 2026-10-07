@@ -1,5 +1,5 @@
-use vm::vm::{VM, InterpretResult};
 use std::io::{self, Write};
+use vm::vm::{InterpretResult, VM};
 
 use bytecode::compiler::CompiledProgram;
 
@@ -13,31 +13,31 @@ impl Debugger {
             vm: VM::new(program),
         }
     }
-    
+
     pub fn vm_mut(&mut self) -> &mut VM {
         &mut self.vm
     }
 
     pub fn start_repl(&mut self) {
         println!("Viyal Debugger MVP started. Type 'h' for help.");
-        
+
         loop {
             print!("(viyal-dbg) ");
             io::stdout().flush().unwrap();
-            
+
             let mut input = String::new();
             if io::stdin().read_line(&mut input).is_err() {
                 break;
             }
-            
+
             let input = input.trim();
             if input.is_empty() {
                 continue;
             }
-            
+
             let parts: Vec<&str> = input.split_whitespace().collect();
             let cmd = parts[0];
-            
+
             match cmd {
                 "h" | "help" => {
                     println!("Commands:");

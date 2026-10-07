@@ -1,0 +1,1 @@
+class Main { void run() { var arr = [10, 20, 30]; print(arr[1]); } }

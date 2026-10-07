@@ -7,13 +7,13 @@ use thiserror::Error;
 #[diagnostic(code(viyal::type_error))]
 pub struct TypeError {
     pub message: String,
-    
+
     #[help]
     pub expected: Option<Type>,
-    
+
     #[help]
     pub found: Option<Type>,
-    
+
     #[label("here")]
     pub span: Span,
 }

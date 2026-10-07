@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use bytecode::chunk::Chunk;
 use interpreter::value::Value;
+use std::collections::HashMap;
 
 pub enum GcObj {
     String(String),
@@ -31,9 +31,12 @@ pub struct NativeBinding {
 
 impl NativeBinding {
     pub fn new(name: &str, func: NativeFunction) -> Self {
-        Self { name: name.to_string(), func }
+        Self {
+            name: name.to_string(),
+            func,
+        }
     }
-    
+
     pub fn call(&self, vm: &mut crate::vm::VM, args: &[Value]) -> Result<Value, String> {
         (self.func)(vm, args)
     }

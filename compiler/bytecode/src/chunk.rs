@@ -29,7 +29,9 @@ impl Chunk {
 
     pub fn patch_jump(&mut self, offset: usize, target: usize) {
         match &mut self.code[offset] {
-            OpCode::OpJump(val) | OpCode::OpJumpIfFalse(val) | OpCode::OpJumpIfOk(val) => *val = target,
+            OpCode::OpJump(val) | OpCode::OpJumpIfFalse(val) | OpCode::OpJumpIfOk(val) => {
+                *val = target
+            }
             _ => panic!("Attempted to patch non-jump instruction"),
         }
     }

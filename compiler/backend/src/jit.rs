@@ -28,9 +28,8 @@ pub fn execute_jit(program: &MirProgram) -> Result<i64, String> {
     let mut flag_builder = settings::builder();
     // "opt_level none" → skip optimizations for maximum JIT compilation speed.
     flag_builder.set("opt_level", "none").unwrap();
-    let isa_builder = cranelift_native::builder().map_err(|e| {
-        format!("Failed to detect host ISA for JIT: {}", e)
-    })?;
+    let isa_builder = cranelift_native::builder()
+        .map_err(|e| format!("Failed to detect host ISA for JIT: {}", e))?;
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .map_err(|e| format!("Failed to build ISA: {}", e))?;
@@ -48,7 +47,9 @@ pub fn execute_jit(program: &MirProgram) -> Result<i64, String> {
         .map_err(|e| format!("[JIT] {}", e))?;
 
     // 5. Finalize — this performs relocation and patches all call-site addresses.
-    module.finalize_definitions().map_err(|e| format!("[JIT] Finalize error: {}", e))?;
+    module
+        .finalize_definitions()
+        .map_err(|e| format!("[JIT] Finalize error: {}", e))?;
 
     // 6. Retrieve a raw function pointer for the `main` entry point.
     //    We look for the Viyal convention: a top-level function named `main`.

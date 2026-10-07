@@ -1,14 +1,16 @@
 use interpreter::value::Value;
-use vm::object::{GcObj, ArrayObj, MapObj};
-use std::fs;
 use std::collections::HashMap;
+use std::fs;
+use vm::object::{ArrayObj, GcObj, MapObj};
 
 pub fn read_text(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
         return Err("fs.readText expects 1 argument (path)".into());
     }
     if let Value::String(path) = &args[0] {
-        fs::read_to_string(path).map(Value::String).map_err(|e| format!("fs.readText error: {}", e))
+        fs::read_to_string(path)
+            .map(Value::String)
+            .map_err(|e| format!("fs.readText error: {}", e))
     } else {
         Err("fs.readText path must be a string".into())
     }
@@ -18,21 +20,39 @@ pub fn write_text(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> 
     if args.len() != 2 {
         return Err("fs.writeText expects 2 arguments (path, content)".into());
     }
-    let path = match &args[0] { Value::String(p) => p, _ => return Err("fs.writeText path must be a string".into()) };
-    let content = match &args[1] { Value::String(c) => c, _ => return Err("fs.writeText content must be a string".into()) };
-    fs::write(path, content).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.writeText error: {}", e))
+    let path = match &args[0] {
+        Value::String(p) => p,
+        _ => return Err("fs.writeText path must be a string".into()),
+    };
+    let content = match &args[1] {
+        Value::String(c) => c,
+        _ => return Err("fs.writeText content must be a string".into()),
+    };
+    fs::write(path, content)
+        .map(|_| Value::Boolean(true))
+        .map_err(|e| format!("fs.writeText error: {}", e))
 }
 
 pub fn append(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
         return Err("fs.append expects 2 arguments (path, content)".into());
     }
-    let path = match &args[0] { Value::String(p) => p, _ => return Err("fs.append path must be a string".into()) };
-    let content = match &args[1] { Value::String(c) => c, _ => return Err("fs.append content must be a string".into()) };
+    let path = match &args[0] {
+        Value::String(p) => p,
+        _ => return Err("fs.append path must be a string".into()),
+    };
+    let content = match &args[1] {
+        Value::String(c) => c,
+        _ => return Err("fs.append content must be a string".into()),
+    };
     use std::io::Write;
-    let mut file = std::fs::OpenOptions::new().append(true).create(true).open(path)
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)
         .map_err(|e| format!("fs.append error: {}", e))?;
-    file.write_all(content.as_bytes()).map_err(|e| format!("fs.append write error: {}", e))?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("fs.append write error: {}", e))?;
     Ok(Value::Boolean(true))
 }
 
@@ -40,9 +60,17 @@ pub fn copy(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
         return Err("fs.copy expects 2 arguments (src, dst)".into());
     }
-    let src = match &args[0] { Value::String(p) => p, _ => return Err("fs.copy src must be a string".into()) };
-    let dst = match &args[1] { Value::String(p) => p, _ => return Err("fs.copy dst must be a string".into()) };
-    fs::copy(src, dst).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.copy error: {}", e))
+    let src = match &args[0] {
+        Value::String(p) => p,
+        _ => return Err("fs.copy src must be a string".into()),
+    };
+    let dst = match &args[1] {
+        Value::String(p) => p,
+        _ => return Err("fs.copy dst must be a string".into()),
+    };
+    fs::copy(src, dst)
+        .map(|_| Value::Boolean(true))
+        .map_err(|e| format!("fs.copy error: {}", e))
 }
 
 pub fn delete(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
@@ -52,9 +80,13 @@ pub fn delete(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if let Value::String(path) = &args[0] {
         let meta = fs::metadata(path).map_err(|e| format!("fs.delete error: {}", e))?;
         if meta.is_dir() {
-            fs::remove_dir_all(path).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.delete error: {}", e))
+            fs::remove_dir_all(path)
+                .map(|_| Value::Boolean(true))
+                .map_err(|e| format!("fs.delete error: {}", e))
         } else {
-            fs::remove_file(path).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.delete error: {}", e))
+            fs::remove_file(path)
+                .map(|_| Value::Boolean(true))
+                .map_err(|e| format!("fs.delete error: {}", e))
         }
     } else {
         Err("fs.delete path must be a string".into())
@@ -65,9 +97,17 @@ pub fn rename(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
         return Err("fs.rename expects 2 arguments (src, dst)".into());
     }
-    let src = match &args[0] { Value::String(p) => p, _ => return Err("fs.rename src must be a string".into()) };
-    let dst = match &args[1] { Value::String(p) => p, _ => return Err("fs.rename dst must be a string".into()) };
-    fs::rename(src, dst).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.rename error: {}", e))
+    let src = match &args[0] {
+        Value::String(p) => p,
+        _ => return Err("fs.rename src must be a string".into()),
+    };
+    let dst = match &args[1] {
+        Value::String(p) => p,
+        _ => return Err("fs.rename dst must be a string".into()),
+    };
+    fs::rename(src, dst)
+        .map(|_| Value::Boolean(true))
+        .map_err(|e| format!("fs.rename error: {}", e))
 }
 
 pub fn mkdir(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
@@ -75,7 +115,9 @@ pub fn mkdir(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("fs.mkdir expects 1 argument (path)".into());
     }
     if let Value::String(path) = &args[0] {
-        fs::create_dir(path).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.mkdir error: {}", e))
+        fs::create_dir(path)
+            .map(|_| Value::Boolean(true))
+            .map_err(|e| format!("fs.mkdir error: {}", e))
     } else {
         Err("fs.mkdir path must be a string".into())
     }
@@ -86,7 +128,9 @@ pub fn mkdir_all(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("fs.mkdirAll expects 1 argument (path)".into());
     }
     if let Value::String(path) = &args[0] {
-        fs::create_dir_all(path).map(|_| Value::Boolean(true)).map_err(|e| format!("fs.mkdirAll error: {}", e))
+        fs::create_dir_all(path)
+            .map(|_| Value::Boolean(true))
+            .map_err(|e| format!("fs.mkdirAll error: {}", e))
     } else {
         Err("fs.mkdirAll path must be a string".into())
     }
@@ -131,7 +175,10 @@ pub fn read_lines(vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     }
     if let Value::String(path) = &args[0] {
         let content = fs::read_to_string(path).map_err(|e| format!("fs.readLines error: {}", e))?;
-        let elements: Vec<Value> = content.lines().map(|l| Value::String(l.to_string())).collect();
+        let elements: Vec<Value> = content
+            .lines()
+            .map(|l| Value::String(l.to_string()))
+            .collect();
         let handle = vm.allocate(GcObj::Array(ArrayObj { elements }));
         Ok(Value::Object(handle))
     } else {
@@ -168,7 +215,8 @@ pub fn stat(vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         entries.insert("size".to_string(), Value::Integer(meta.len() as i64));
         entries.insert("isFile".to_string(), Value::Boolean(meta.is_file()));
         entries.insert("isDir".to_string(), Value::Boolean(meta.is_dir()));
-        let modified = meta.modified()
+        let modified = meta
+            .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| Value::Integer(d.as_secs() as i64))
@@ -180,4 +228,3 @@ pub fn stat(vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         Err("fs.stat path must be a string".into())
     }
 }
-

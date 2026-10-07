@@ -14,7 +14,12 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
         let mut lexer = Lexer::new(source);
-        let current = lexer.next().map(|res| res.unwrap_or(SpannedToken { token: Token::Null, span: 0..0 }));
+        let current = lexer.next().map(|res| {
+            res.unwrap_or(SpannedToken {
+                token: Token::Null,
+                span: 0..0,
+            })
+        });
         Self {
             lexer,
             current,
@@ -26,7 +31,7 @@ impl<'a> Parser<'a> {
         if let Some(tok) = &self.current {
             self.previous_span = tok.span.clone();
         }
-        
+
         self.current = match self.lexer.next() {
             Some(Ok(tok)) => Some(tok),
             Some(Err(_)) => None,
@@ -69,13 +74,19 @@ impl<'a> Parser<'a> {
                     Token::BoolType => "bool".to_string(),
                     Token::Void => "void".to_string(),
                     _ => {
-                        return Err(ParseError { message: message.to_string(), span: tok.span.clone() });
+                        return Err(ParseError {
+                            message: message.to_string(),
+                            span: tok.span.clone(),
+                        });
                     }
                 };
                 self.advance();
                 Ok(name)
-            },
-            None => Err(ParseError { message: message.to_string(), span: self.previous_span.clone() }),
+            }
+            None => Err(ParseError {
+                message: message.to_string(),
+                span: self.previous_span.clone(),
+            }),
         }
     }
 
@@ -106,7 +117,7 @@ impl<'a> Parser<'a> {
             }
             Type::Named(name, type_args)
         };
-        
+
         while self.check(&Token::LBracket) {
             self.advance();
             self.consume(Token::RBracket, "Expected ']' after '[' in array type")?;
@@ -154,10 +165,10 @@ impl<'a> Parser<'a> {
 
     fn parse_declaration(&mut self) -> Result<Spanned<Decl>, ParseError> {
         let start = self.current.as_ref().map(|t| t.span.start).unwrap_or(0);
-        
+
         if self.check(&Token::Import) {
             self.advance();
-            
+
             let mut items = Vec::new();
             self.consume(Token::LBrace, "Expected '{' after import")?;
             if !self.check(&Token::RBrace) {
@@ -177,7 +188,7 @@ impl<'a> Parser<'a> {
             }
             self.consume(Token::RBrace, "Expected '}' after import items")?;
             self.consume(Token::From, "Expected 'from' after import items")?;
-            
+
             if self.current.is_none() {
                 return Err(ParseError {
                     message: "Expected import path string".into(),
@@ -190,41 +201,46 @@ impl<'a> Parser<'a> {
                 s
             } else {
                 return Err(ParseError {
-                    message: format!("Expected string literal for import path, found {:?}", path_token.token),
+                    message: format!(
+                        "Expected string literal for import path, found {:?}",
+                        path_token.token
+                    ),
                     span: path_token.span,
                 });
             };
             let semi = self.consume(Token::Semi, "Expected ';' after import statement")?;
-            
+
             return Ok(Spanned {
                 node: Decl::Import { path, items },
                 span: start..semi.span.end,
             });
         }
-        
+
         let mut is_exported = false;
         if self.check(&Token::Export) {
             self.advance();
             is_exported = true;
         }
-        
+
         if self.check(&Token::Class) {
             self.advance(); // consume 'class'
             let name = self.consume_identifier("Expected class name")?;
-            
+
             let mut type_params = Vec::new();
             if self.check(&Token::Less) {
                 self.advance();
                 if !self.check(&Token::Greater) {
                     loop {
                         type_params.push(self.consume_identifier("Expected type parameter name")?);
-                        if !self.check(&Token::Comma) { break; }
+                        if !self.check(&Token::Comma) {
+                            break;
+                        }
                         self.advance();
                     }
                 }
                 self.consume(Token::Greater, "Expected '>' after type parameters")?;
             }
-            
+
             // Primary constructor (MVP style)
             let mut primary_constructor = Vec::new();
             if self.check(&Token::LParen) {
@@ -237,7 +253,7 @@ impl<'a> Parser<'a> {
                             param_type,
                             name: param_name,
                         });
-                        
+
                         if !self.check(&Token::Comma) {
                             break;
                         }
@@ -264,42 +280,50 @@ impl<'a> Parser<'a> {
                     self.advance();
                 }
             }
-            
+
             self.consume(Token::LBrace, "Expected '{' before class body")?;
-            
+
             let mut fields = Vec::new();
             let mut methods = Vec::new();
-            
+
             while !self.check(&Token::RBrace) && self.current.is_some() {
                 // Need to distinguish field vs method
                 let member_type = self.parse_type()?;
                 let member_name = self.consume_identifier("Expected member name")?;
-                
+
                 let mut type_params = Vec::new();
                 if self.check(&Token::Less) {
                     self.advance();
                     if !self.check(&Token::Greater) {
                         loop {
-                            type_params.push(self.consume_identifier("Expected type parameter name")?);
-                            if !self.check(&Token::Comma) { break; }
+                            type_params
+                                .push(self.consume_identifier("Expected type parameter name")?);
+                            if !self.check(&Token::Comma) {
+                                break;
+                            }
                             self.advance();
                         }
                     }
                     self.consume(Token::Greater, "Expected '>' after method type parameters")?;
                 }
-                
+
                 if self.check(&Token::LParen) {
                     // It's a method
                     self.advance();
                     let mut params = Vec::new();
                     if !self.check(&Token::RParen) {
-                         loop {
+                        loop {
                             let param_type = self.parse_type()?;
                             let param_name = self.consume_identifier("Expected parameter name")?;
-                            params.push(Param { param_type, name: param_name });
-                            if !self.check(&Token::Comma) { break; }
+                            params.push(Param {
+                                param_type,
+                                name: param_name,
+                            });
+                            if !self.check(&Token::Comma) {
+                                break;
+                            }
                             self.advance();
-                         }
+                        }
                     }
                     self.consume(Token::RParen, "Expected ')' after method parameters")?;
                     let body = self.parse_block()?;
@@ -321,7 +345,7 @@ impl<'a> Parser<'a> {
                 }
             }
             let rbrace = self.consume(Token::RBrace, "Expected '}' after class body")?;
-            
+
             let span = start..rbrace.span.end;
             Ok(Spanned {
                 node: Decl::Class {
@@ -343,50 +367,67 @@ impl<'a> Parser<'a> {
             let target_type = self.parse_type()?;
             let semi = self.consume(Token::Semi, "Expected ';' after type alias")?;
             Ok(Spanned {
-                node: Decl::TypeAlias { name, target_type, is_exported },
+                node: Decl::TypeAlias {
+                    name,
+                    target_type,
+                    is_exported,
+                },
                 span: start..semi.span.end,
             })
         } else {
             // Attempt to parse a top-level function
             let return_type = self.parse_type()?;
             let function_name = self.consume_identifier("Expected function or declaration name")?;
-            
+
             let mut type_params = Vec::new();
             if self.check(&Token::Less) {
                 self.advance();
                 if !self.check(&Token::Greater) {
                     loop {
                         type_params.push(self.consume_identifier("Expected type parameter name")?);
-                        if !self.check(&Token::Comma) { break; }
+                        if !self.check(&Token::Comma) {
+                            break;
+                        }
                         self.advance();
                     }
                 }
-                self.consume(Token::Greater, "Expected '>' after function type parameters")?;
+                self.consume(
+                    Token::Greater,
+                    "Expected '>' after function type parameters",
+                )?;
             }
-            
+
             if self.check(&Token::LParen) {
                 self.advance();
                 let mut params = Vec::new();
                 if !self.check(&Token::RParen) {
-                     loop {
+                    loop {
                         let param_type = self.parse_type()?;
                         let param_name = self.consume_identifier("Expected parameter name")?;
-                        params.push(Param { param_type, name: param_name });
-                        if !self.check(&Token::Comma) { break; }
+                        params.push(Param {
+                            param_type,
+                            name: param_name,
+                        });
+                        if !self.check(&Token::Comma) {
+                            break;
+                        }
                         self.advance();
-                     }
+                    }
                 }
                 self.consume(Token::RParen, "Expected ')' after function parameters")?;
                 let body = self.parse_block()?;
                 let span = start..body.span.end;
                 Ok(Spanned {
-                    node: Decl::Function(Method {
-                        return_type: Some(return_type),
-                        name: function_name,
-                        type_params,
-                        params,
-                        body,
-                    }, is_exported),
+                    node: Decl::Function(
+                        Method {
+                            return_type: Some(return_type),
+                            name: function_name,
+                            type_params,
+                            params,
+                            body,
+                        },
+                        is_exported,
+                    ),
                     span,
                 })
             } else {
@@ -401,22 +442,22 @@ impl<'a> Parser<'a> {
     fn parse_block(&mut self) -> Result<Spanned<Stmt>, ParseError> {
         let start = self.current.as_ref().map(|t| t.span.start).unwrap_or(0);
         self.consume(Token::LBrace, "Expected '{' at start of block")?;
-        
+
         let mut stmts = Vec::new();
         while !self.check(&Token::RBrace) && self.current.is_some() {
             stmts.push(self.parse_statement()?);
         }
-        
+
         let rbrace = self.consume(Token::RBrace, "Expected '}' at end of block")?;
         Ok(Spanned {
             node: Stmt::Block(stmts),
             span: start..rbrace.span.end,
         })
     }
-    
+
     fn parse_statement(&mut self) -> Result<Spanned<Stmt>, ParseError> {
         let start = self.current.as_ref().map(|t| t.span.start).unwrap_or(0);
-        
+
         if self.check(&Token::Var) || self.check(&Token::Mut) {
             let is_final = if self.check(&Token::Var) {
                 self.advance();
@@ -448,16 +489,19 @@ impl<'a> Parser<'a> {
             self.consume(Token::LParen, "Expected '(' after 'if'")?;
             let condition = self.parse_expression()?;
             self.consume(Token::RParen, "Expected ')' after if condition")?;
-            
+
             let then_branch = Box::new(self.parse_statement()?);
             let mut else_branch = None;
-            
+
             if self.check(&Token::Else) {
                 self.advance();
                 else_branch = Some(Box::new(self.parse_statement()?));
             }
-            
-            let end_span = else_branch.as_ref().map(|b| b.span.end).unwrap_or(then_branch.span.end);
+
+            let end_span = else_branch
+                .as_ref()
+                .map(|b| b.span.end)
+                .unwrap_or(then_branch.span.end);
             return Ok(Spanned {
                 node: Stmt::If {
                     condition,
@@ -471,7 +515,7 @@ impl<'a> Parser<'a> {
             self.consume(Token::LParen, "Expected '(' after 'while'")?;
             let condition = self.parse_expression()?;
             self.consume(Token::RParen, "Expected ')' after while condition")?;
-            
+
             let body = Box::new(self.parse_statement()?);
             return Ok(Spanned {
                 node: Stmt::While {
@@ -484,9 +528,9 @@ impl<'a> Parser<'a> {
             self.advance();
             let item_name = self.consume_identifier("Expected variable name after 'for'")?;
             self.consume(Token::In, "Expected 'in' after for loop variable")?;
-            
+
             let expr1 = self.parse_expression()?;
-            
+
             if self.check(&Token::DotDot) {
                 self.advance();
                 let expr2 = self.parse_expression()?;
@@ -523,29 +567,29 @@ impl<'a> Parser<'a> {
                 span: start..semi.span.end,
             });
         }
-        
+
         // Simple expression statement
         let expr = self.parse_expression()?;
         let semi = self.consume(Token::Semi, "Expected ';' after expression")?;
-        
+
         Ok(Spanned {
             node: Stmt::Expr(expr),
             span: start..semi.span.end,
         })
     }
-    
+
     fn parse_expression(&mut self) -> Result<Spanned<Expr>, ParseError> {
         self.parse_assignment()
     }
 
     fn parse_assignment(&mut self) -> Result<Spanned<Expr>, ParseError> {
         let expr = self.parse_equality()?;
-        
+
         if self.check(&Token::Eq) {
             self.advance();
             let value = self.parse_assignment()?; // Right-associative
             let span = expr.span.start..value.span.end;
-            
+
             match expr.node {
                 Expr::Index(array, index) => {
                     return Ok(Spanned {
@@ -567,14 +611,18 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        
+
         Ok(expr)
     }
 
     fn parse_equality(&mut self) -> Result<Spanned<Expr>, ParseError> {
         let mut expr = self.parse_comparison()?;
         while self.check(&Token::EqEq) || self.check(&Token::NotEq) {
-            let op = if self.check(&Token::EqEq) { BinaryOp::Eq } else { BinaryOp::NotEq };
+            let op = if self.check(&Token::EqEq) {
+                BinaryOp::Eq
+            } else {
+                BinaryOp::NotEq
+            };
             self.advance();
             let right = self.parse_comparison()?;
             let span = expr.span.start..right.span.end;
@@ -588,11 +636,20 @@ impl<'a> Parser<'a> {
 
     fn parse_comparison(&mut self) -> Result<Spanned<Expr>, ParseError> {
         let mut expr = self.parse_term()?;
-        while self.check(&Token::Less) || self.check(&Token::Greater) || self.check(&Token::LessEq) || self.check(&Token::GreaterEq) {
-            let op = if self.check(&Token::Less) { BinaryOp::Less } 
-                     else if self.check(&Token::Greater) { BinaryOp::Greater }
-                     else if self.check(&Token::LessEq) { BinaryOp::LessEq }
-                     else { BinaryOp::GreaterEq };
+        while self.check(&Token::Less)
+            || self.check(&Token::Greater)
+            || self.check(&Token::LessEq)
+            || self.check(&Token::GreaterEq)
+        {
+            let op = if self.check(&Token::Less) {
+                BinaryOp::Less
+            } else if self.check(&Token::Greater) {
+                BinaryOp::Greater
+            } else if self.check(&Token::LessEq) {
+                BinaryOp::LessEq
+            } else {
+                BinaryOp::GreaterEq
+            };
             self.advance();
             let right = self.parse_term()?;
             let span = expr.span.start..right.span.end;
@@ -605,9 +662,32 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_term(&mut self) -> Result<Spanned<Expr>, ParseError> {
-        let mut expr = self.parse_call()?;
+        let mut expr = self.parse_factor()?;
         while self.check(&Token::Plus) || self.check(&Token::Minus) {
-            let op = if self.check(&Token::Plus) { BinaryOp::Add } else { BinaryOp::Sub };
+            let op = if self.check(&Token::Plus) {
+                BinaryOp::Add
+            } else {
+                BinaryOp::Sub
+            };
+            self.advance();
+            let right = self.parse_factor()?;
+            let span = expr.span.start..right.span.end;
+            expr = Spanned {
+                node: Expr::Binary(Box::new(expr), op, Box::new(right)),
+                span,
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_factor(&mut self) -> Result<Spanned<Expr>, ParseError> {
+        let mut expr = self.parse_call()?;
+        while self.check(&Token::Star) || self.check(&Token::Slash) {
+            let op = if self.check(&Token::Star) {
+                BinaryOp::Mul
+            } else {
+                BinaryOp::Div
+            };
             self.advance();
             let right = self.parse_call()?;
             let span = expr.span.start..right.span.end;
@@ -717,31 +797,39 @@ impl<'a> Parser<'a> {
                         };
                         self.advance();
                         pat
-                    },
+                    }
                     Token::Integer(i) => {
                         let pat = MatchPattern::Literal(Literal::Integer(*i));
                         self.advance();
                         pat
-                    },
+                    }
                     Token::StringLit(s) => {
                         let pat = MatchPattern::Literal(Literal::String(s.clone()));
                         self.advance();
                         pat
-                    },
+                    }
                     Token::True => {
                         let pat = MatchPattern::Literal(Literal::Boolean(true));
                         self.advance();
                         pat
-                    },
+                    }
                     Token::False => {
                         let pat = MatchPattern::Literal(Literal::Boolean(false));
                         self.advance();
                         pat
-                    },
-                    _ => return Err(ParseError { message: format!("Invalid match pattern: {:?}", tok.token), span: tok.span.clone() }),
+                    }
+                    _ => {
+                        return Err(ParseError {
+                            message: format!("Invalid match pattern: {:?}", tok.token),
+                            span: tok.span.clone(),
+                        });
+                    }
                 }
             } else {
-                return Err(ParseError { message: "Unexpected EOF in match pattern".into(), span: self.previous_span.clone() });
+                return Err(ParseError {
+                    message: "Unexpected EOF in match pattern".into(),
+                    span: self.previous_span.clone(),
+                });
             };
 
             self.consume(Token::FatArrow, "Expected '=>' after match pattern")?;
@@ -765,7 +853,10 @@ impl<'a> Parser<'a> {
             if self.check(&Token::Comma) {
                 self.advance();
             } else if !self.check(&Token::RBrace) {
-                return Err(ParseError { message: "Expected ',' or '}' after match arm".into(), span: self.previous_span.clone() });
+                return Err(ParseError {
+                    message: "Expected ',' or '}' after match arm".into(),
+                    span: self.previous_span.clone(),
+                });
             }
         }
 
@@ -779,28 +870,37 @@ impl<'a> Parser<'a> {
 
     fn parse_primary_expr(&mut self) -> Result<Spanned<Expr>, ParseError> {
         let start = self.current.as_ref().map(|t| t.span.start).unwrap_or(0);
-        
+
         if let Some(tok) = &self.current {
             match &tok.token {
                 Token::StringLit(s) => {
                     let s_val = s.clone();
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Literal(Literal::String(s_val)), span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Literal(Literal::String(s_val)),
+                        span,
+                    })
+                }
                 Token::LBracket => {
                     self.advance();
                     let mut items = Vec::new();
                     if !self.check(&Token::RBracket) {
                         loop {
                             items.push(self.parse_expression()?);
-                            if !self.check(&Token::Comma) { break; }
+                            if !self.check(&Token::Comma) {
+                                break;
+                            }
                             self.advance();
                         }
                     }
-                    let rbracket = self.consume(Token::RBracket, "Expected ']' after array elements")?;
-                    Ok(Spanned { node: Expr::Array(items), span: start..rbracket.span.end })
-                },
+                    let rbracket =
+                        self.consume(Token::RBracket, "Expected ']' after array elements")?;
+                    Ok(Spanned {
+                        node: Expr::Array(items),
+                        span: start..rbracket.span.end,
+                    })
+                }
                 Token::LBrace => {
                     self.advance();
                     let mut pairs = Vec::new();
@@ -810,50 +910,76 @@ impl<'a> Parser<'a> {
                             self.consume(Token::Colon, "Expected ':' after map key")?;
                             let value = self.parse_expression()?;
                             pairs.push((key, value));
-                            if !self.check(&Token::Comma) { break; }
+                            if !self.check(&Token::Comma) {
+                                break;
+                            }
                             self.advance();
                         }
                     }
                     let rbrace = self.consume(Token::RBrace, "Expected '}' after map elements")?;
-                    Ok(Spanned { node: Expr::Map(pairs), span: start..rbrace.span.end })
-                },
+                    Ok(Spanned {
+                        node: Expr::Map(pairs),
+                        span: start..rbrace.span.end,
+                    })
+                }
                 Token::Integer(i) => {
                     let i_val = *i;
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Literal(Literal::Integer(i_val)), span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Literal(Literal::Integer(i_val)),
+                        span,
+                    })
+                }
                 Token::Float(f) => {
                     let f_val = *f;
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Literal(Literal::Float(f_val)), span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Literal(Literal::Float(f_val)),
+                        span,
+                    })
+                }
                 Token::True => {
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Literal(Literal::Boolean(true)), span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Literal(Literal::Boolean(true)),
+                        span,
+                    })
+                }
                 Token::False => {
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Literal(Literal::Boolean(false)), span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Literal(Literal::Boolean(false)),
+                        span,
+                    })
+                }
                 Token::Null => {
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Literal(Literal::Null), span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Literal(Literal::Null),
+                        span,
+                    })
+                }
                 Token::This => {
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::This, span })
-                },
+                    Ok(Spanned {
+                        node: Expr::This,
+                        span,
+                    })
+                }
                 Token::Super => {
                     let span = tok.span.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Super, span })
-                },
+                    Ok(Spanned {
+                        node: Expr::Super,
+                        span,
+                    })
+                }
                 Token::New => {
                     self.advance();
                     let class_name = self.consume_identifier("Expected class name after 'new'")?;
@@ -862,25 +988,37 @@ impl<'a> Parser<'a> {
                     if !self.check(&Token::RParen) {
                         loop {
                             args.push(self.parse_expression()?);
-                            if !self.check(&Token::Comma) { break; }
+                            if !self.check(&Token::Comma) {
+                                break;
+                            }
                             self.advance();
                         }
                     }
                     let rparen = self.consume(Token::RParen, "Expected ')'")?;
-                    Ok(Spanned { node: Expr::New(class_name, Vec::new(), args), span: start..rparen.span.end })
-                },
-                Token::Match => {
-                    self.parse_match_expr()
-                },
+                    Ok(Spanned {
+                        node: Expr::New(class_name, Vec::new(), args),
+                        span: start..rparen.span.end,
+                    })
+                }
+                Token::Match => self.parse_match_expr(),
                 Token::Identifier(id) => {
                     let id_val = id.clone();
                     self.advance();
-                    Ok(Spanned { node: Expr::Identifier(id_val), span: start..self.previous_span.end })
-                },
-                _ => Err(ParseError { message: format!("Expected expression, found {:?}", tok), span: start..start }),
+                    Ok(Spanned {
+                        node: Expr::Identifier(id_val),
+                        span: start..self.previous_span.end,
+                    })
+                }
+                _ => Err(ParseError {
+                    message: format!("Expected expression, found {:?}", tok),
+                    span: start..start,
+                }),
             }
         } else {
-            Err(ParseError { message: "Unexpected EOF".to_string(), span: start..start })
+            Err(ParseError {
+                message: "Unexpected EOF".to_string(),
+                span: start..start,
+            })
         }
     }
 }

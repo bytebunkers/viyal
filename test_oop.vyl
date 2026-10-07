@@ -1,0 +1,14 @@
+class Point {
+    int x;
+    int y;
+}
+
+class Main {
+    void run() {
+        mut p = new Point();
+        p.x = 10;
+        p.y = 20;
+        print(p.x);
+        print(p.y);
+    }
+}

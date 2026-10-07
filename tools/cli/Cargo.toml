@@ -1,6 +1,6 @@
 [package]
 name = "viyal"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -18,7 +18,7 @@ debugger = { path = "../debugger" }
 typechecker = { path = "../../compiler/typechecker" }
 notify = "8.2.0"
 miette = { version = "7.6.0", features = ["fancy"] }
-mir = { version = "0.1.1", path = "../../compiler/mir" }
-optimizer = { version = "0.1.1", path = "../../compiler/optimizer" }
-resolver = { version = "0.1.1", path = "../../compiler/resolver" }
+mir = { version = "0.2.0", path = "../../compiler/mir" }
+optimizer = { version = "0.2.0", path = "../../compiler/optimizer" }
+resolver = { version = "0.2.0", path = "../../compiler/resolver" }
 backend = { path = "../../compiler/backend" }

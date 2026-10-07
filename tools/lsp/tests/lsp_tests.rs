@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
     use lsp_server::Connection;
     use lsp_types::Url;
+    use std::sync::mpsc;
 
     #[test]
     fn test_diagnostics_smoke() {

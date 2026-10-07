@@ -27,7 +27,7 @@ impl Cfg {
         };
 
         cfg.build_edges(func);
-        
+
         if num_blocks > 0 {
             cfg.compute_dominators();
             cfg.compute_dominance_frontiers();
@@ -52,11 +52,19 @@ impl Cfg {
                 Terminator::Goto { target } => {
                     add_edge(*target);
                 }
-                Terminator::If { then_target, else_target, .. } => {
+                Terminator::If {
+                    then_target,
+                    else_target,
+                    ..
+                } => {
                     add_edge(*then_target);
                     add_edge(*else_target);
                 }
-                Terminator::IfOk { then_target, else_target, .. } => {
+                Terminator::IfOk {
+                    then_target,
+                    else_target,
+                    ..
+                } => {
                     add_edge(*then_target);
                     add_edge(*else_target);
                 }
@@ -69,12 +77,12 @@ impl Cfg {
     /// Cooper, Harvey, Kennedy algorithm ("A Simple, Fast Dominance Algorithm").
     fn compute_dominators(&mut self) {
         let entry = 0;
-        
+
         // Post-order traversal for fast convergence
         let mut post_order = Vec::new();
         let mut visited = vec![false; self.num_blocks];
         self.dfs_post_order(entry, &mut visited, &mut post_order);
-        
+
         // Map block id to post-order index
         let mut post_order_idx = vec![0; self.num_blocks];
         for (idx, &node) in post_order.iter().enumerate() {
@@ -86,7 +94,7 @@ impl Cfg {
 
         while changed {
             changed = false;
-            
+
             // Iterate in reverse post-order (except entry)
             for &b in post_order.iter().rev() {
                 if b == entry {
@@ -160,7 +168,7 @@ impl Cfg {
                         runner = self.idom[runner].unwrap_or(runner);
                         if runner == self.idom[runner].unwrap_or(runner) {
                             // Hit root or disconnected
-                            break; 
+                            break;
                         }
                     }
                 }

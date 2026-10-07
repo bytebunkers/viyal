@@ -21,7 +21,8 @@ pub fn basename(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("path.basename expects 1 argument (path)".into());
     }
     if let Value::String(p) = &args[0] {
-        let name = Path::new(p).file_name()
+        let name = Path::new(p)
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         Ok(Value::String(name))
@@ -35,7 +36,8 @@ pub fn dirname(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("path.dirname expects 1 argument (path)".into());
     }
     if let Value::String(p) = &args[0] {
-        let parent = Path::new(p).parent()
+        let parent = Path::new(p)
+            .parent()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         Ok(Value::String(parent))
@@ -49,7 +51,8 @@ pub fn extension(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("path.extension expects 1 argument (path)".into());
     }
     if let Value::String(p) = &args[0] {
-        let ext = Path::new(p).extension()
+        let ext = Path::new(p)
+            .extension()
             .map(|e| e.to_string_lossy().to_string())
             .unwrap_or_default();
         Ok(Value::String(ext))
@@ -63,7 +66,8 @@ pub fn stem(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("path.stem expects 1 argument (path)".into());
     }
     if let Value::String(p) = &args[0] {
-        let stem = Path::new(p).file_stem()
+        let stem = Path::new(p)
+            .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
         Ok(Value::String(stem))

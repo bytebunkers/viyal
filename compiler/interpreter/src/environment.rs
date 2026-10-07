@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::value::Value;
+use std::collections::HashMap;
 
 pub struct Environment {
     values: HashMap<String, Value>,

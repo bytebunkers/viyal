@@ -13,11 +13,11 @@ pub enum OpCode {
     OpGreaterEqual,
     OpJump(usize),
     OpJumpIfFalse(usize),
-    OpCall(usize, u8), // function name index, arg count
+    OpCall(usize, u8),       // function name index, arg count
     OpCallNative(usize, u8), // index into constants (string name), arg count
     OpPrint,
     OpClass(usize),
-    OpMethod(usize, usize, u8), // method name index, chunk index, arity
+    OpMethod(usize, usize, u8),   // method name index, chunk index, arity
     OpFunction(usize, usize, u8), // function name index, chunk index, arity
     OpConstruct(usize, u8),
     OpInvoke(usize, u8),

@@ -1,8 +1,8 @@
 use interpreter::value::Value;
-use vm::object::{GcObj, ArrayObj, MapObj};
+use std::collections::HashMap;
 use std::env;
 use std::process::Command;
-use std::collections::HashMap;
+use vm::object::{ArrayObj, GcObj, MapObj};
 
 pub fn get_env(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
@@ -22,9 +22,17 @@ pub fn set_env(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
         return Err("os.setenv expects 2 arguments (key, value)".into());
     }
-    let key = match &args[0] { Value::String(k) => k, _ => return Err("os.setenv key must be a string".into()) };
-    let val = match &args[1] { Value::String(v) => v, _ => return Err("os.setenv value must be a string".into()) };
-    unsafe { env::set_var(key, val); }
+    let key = match &args[0] {
+        Value::String(k) => k,
+        _ => return Err("os.setenv key must be a string".into()),
+    };
+    let val = match &args[1] {
+        Value::String(v) => v,
+        _ => return Err("os.setenv value must be a string".into()),
+    };
+    unsafe {
+        env::set_var(key, val);
+    }
     Ok(Value::Boolean(true))
 }
 
@@ -67,7 +75,8 @@ pub fn hostname(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         return Err("os.hostname expects 0 arguments".into());
     }
     // Use `hostname` command cross-platform
-    let output = Command::new("hostname").output()
+    let output = Command::new("hostname")
+        .output()
         .map_err(|e| format!("os.hostname error: {}", e))?;
     let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
     Ok(Value::String(name))
@@ -132,11 +141,12 @@ pub fn execute(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
             Command::new("sh").args(["-c", cmd]).output()
         };
         match output {
-            Ok(out) => Ok(Value::String(String::from_utf8_lossy(&out.stdout).to_string())),
+            Ok(out) => Ok(Value::String(
+                String::from_utf8_lossy(&out.stdout).to_string(),
+            )),
             Err(e) => Err(format!("os.execute error: {}", e)),
         }
     } else {
         Err("os.execute command must be a string".into())
     }
 }
-

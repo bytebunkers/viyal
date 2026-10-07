@@ -13,6 +13,6 @@ pub fn format(source: &str) -> Result<String, String> {
         Err(errors) => {
             let messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
             Err(format!("Parse errors: {}", messages.join(", ")))
-        },
+        }
     }
 }

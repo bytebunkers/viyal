@@ -1,6 +1,7 @@
 use lsp_server::{Connection, Message};
 use lsp_types::{
-    notification::{PublishDiagnostics, Notification}, Diagnostic, DiagnosticSeverity, Position, PublishDiagnosticsParams, Range, Url,
+    Diagnostic, DiagnosticSeverity, Position, PublishDiagnosticsParams, Range, Url,
+    notification::{Notification, PublishDiagnostics},
 };
 use parser::Parser;
 use typechecker::TypeChecker;
@@ -16,7 +17,7 @@ pub fn publish_diagnostics(connection: &Connection, uri: Url, text: String) {
                 // Map byte span to line/col
                 let start = byte_offset_to_position(&text, type_err.span.start);
                 let end = byte_offset_to_position(&text, type_err.span.end);
-                
+
                 let diag = Diagnostic {
                     range: Range { start, end },
                     severity: Some(DiagnosticSeverity::ERROR),
@@ -31,7 +32,7 @@ pub fn publish_diagnostics(connection: &Connection, uri: Url, text: String) {
                 // Map byte span to line/col
                 let start = byte_offset_to_position(&text, parse_err.span.start);
                 let end = byte_offset_to_position(&text, parse_err.span.end);
-                
+
                 let diag = Diagnostic {
                     range: Range { start, end },
                     severity: Some(DiagnosticSeverity::ERROR),
@@ -48,11 +49,8 @@ pub fn publish_diagnostics(connection: &Connection, uri: Url, text: String) {
         diagnostics,
         version: None,
     };
-    
-    let not = lsp_server::Notification::new(
-        PublishDiagnostics::METHOD.to_string(),
-        params,
-    );
+
+    let not = lsp_server::Notification::new(PublishDiagnostics::METHOD.to_string(), params);
     connection.sender.send(Message::Notification(not)).unwrap();
 }
 
@@ -70,5 +68,8 @@ fn byte_offset_to_position(text: &str, offset: usize) -> Position {
             col += 1;
         }
     }
-    Position { line, character: col }
+    Position {
+        line,
+        character: col,
+    }
 }

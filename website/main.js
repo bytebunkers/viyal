@@ -1,4 +1,8 @@
+import { updateVersionFromGithub } from './github.js';
+
 document.addEventListener('DOMContentLoaded', () => {
+  updateVersionFromGithub('bytebunkers/viyal');
+
   // Tab switching logic
   const tabs = document.querySelectorAll('.tab');
   const contents = document.querySelectorAll('.code-content');

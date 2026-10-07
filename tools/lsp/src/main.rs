@@ -1,9 +1,9 @@
-pub mod server;
 pub mod diagnostics;
+pub mod server;
 
-use std::error::Error;
 use lsp_server::Connection;
 use lsp_types::{ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind};
+use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Note that  we must have our logging only write out to stderr.
@@ -20,9 +20,9 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     })
     .unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
-    
+
     server::main_loop(connection, initialization_params)?;
-    
+
     io_threads.join()?;
 
     eprintln!("shutting down Viyal LSP server");

@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::fs;
-use ast::{Program, Decl, Expr, Stmt, Type, Spanned, MatchPattern};
+use ast::{Decl, Expr, MatchPattern, Program, Spanned, Stmt, Type};
 use parser::Parser;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct LinkError {
     pub message: String,
@@ -26,15 +26,17 @@ impl ModuleLinker {
     }
 
     pub fn link(&mut self, main_path: &Path) -> Result<Program, LinkError> {
-        let abs_path = main_path.canonicalize().unwrap_or_else(|_| main_path.to_path_buf());
-        
+        let abs_path = main_path
+            .canonicalize()
+            .unwrap_or_else(|_| main_path.to_path_buf());
+
         self.process_file(&abs_path, "main")?;
-        
+
         Ok(Program {
             declarations: self.merged_decls.clone(),
         })
     }
-    
+
     fn process_file(&mut self, file_path: &Path, module_name: &str) -> Result<(), LinkError> {
         // Cycle guard: if this file is already on the current resolution stack,
         // a circular import exists. Emit a clear error rather than infinite recursing.
@@ -53,39 +55,49 @@ impl ModuleLinker {
         }
         self.resolving.insert(file_path.to_path_buf());
         self.visited.insert(file_path.to_path_buf());
-        
+
         let source = fs::read_to_string(file_path).map_err(|e| LinkError {
             message: format!("Failed to read file: {}", e),
             path: file_path.to_path_buf(),
         })?;
-        
+
         let mut parser = Parser::new(&source);
         let mut program = parser.parse_program().map_err(|errs| LinkError {
             message: format!("Parse error: {}", errs[0].message),
             path: file_path.to_path_buf(),
         })?;
-        
+
         // Find exports in this file so we know what can be renamed internally
         let mut local_exports = HashSet::new();
         for decl in &program.declarations {
             match &decl.node {
                 Decl::Function(method, is_exported) => {
-                    if *is_exported || module_name == "main" { local_exports.insert(method.name.clone()); }
+                    if *is_exported || module_name == "main" {
+                        local_exports.insert(method.name.clone());
+                    }
                 }
-                Decl::Class { name, is_exported, .. } => {
-                    if *is_exported || module_name == "main" { local_exports.insert(name.clone()); }
+                Decl::Class {
+                    name, is_exported, ..
+                } => {
+                    if *is_exported || module_name == "main" {
+                        local_exports.insert(name.clone());
+                    }
                 }
-                Decl::TypeAlias { name, is_exported, .. } => {
-                    if *is_exported || module_name == "main" { local_exports.insert(name.clone()); }
+                Decl::TypeAlias {
+                    name, is_exported, ..
+                } => {
+                    if *is_exported || module_name == "main" {
+                        local_exports.insert(name.clone());
+                    }
                 }
                 _ => {}
             }
         }
-        
+
         // Process imports
         // Map of local identifier -> mangled identifier
         let mut rename_map = HashMap::new();
-        
+
         for decl in &program.declarations {
             if let Decl::Import { path, items } = &decl.node {
                 // Resolve path relative to current file
@@ -95,15 +107,21 @@ impl ModuleLinker {
                 } else {
                     import_path
                 };
-                
-                let import_abs = import_path.canonicalize().unwrap_or_else(|_| import_path.to_path_buf());
-                
+
+                let import_abs = import_path
+                    .canonicalize()
+                    .unwrap_or_else(|_| import_path.to_path_buf());
+
                 // The module name is the file stem (e.g. "math")
-                let import_mod_name = import_abs.file_stem().unwrap().to_string_lossy().to_string();
-                
+                let import_mod_name = import_abs
+                    .file_stem()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+
                 // Process the imported file recursively
                 self.process_file(&import_abs, &import_mod_name)?;
-                
+
                 // Register aliases in rename_map
                 for (item_name, alias) in items {
                     let local_name = alias.clone().unwrap_or_else(|| item_name.clone());
@@ -112,7 +130,7 @@ impl ModuleLinker {
                 }
             }
         }
-        
+
         // Mangle local definitions
         if module_name != "main" {
             for decl in &mut program.declarations {
@@ -136,20 +154,20 @@ impl ModuleLinker {
                 }
             }
         }
-        
+
         // Rename all usages
         let mut renamer = Renamer { map: rename_map };
         for decl in &mut program.declarations {
             renamer.visit_decl(decl);
         }
-        
+
         // Push all non-import decls to merged
         for decl in program.declarations {
             if !matches!(decl.node, Decl::Import { .. }) {
                 self.merged_decls.push(decl);
             }
         }
-        
+
         // Pop the file from the resolving stack — we have finished processing it.
         self.resolving.remove(file_path);
         Ok(())
@@ -167,7 +185,7 @@ impl Renamer {
             *name = mangled.clone();
         }
     }
-    
+
     fn rename_type(&self, ty: &mut Type) {
         match ty {
             Type::Named(name, _) => self.rename(name),
@@ -193,7 +211,14 @@ impl Renamer {
                 }
                 self.visit_stmt(&mut method.body);
             }
-            Decl::Class { extends_class, implements_interfaces, fields, primary_constructor, methods, .. } => {
+            Decl::Class {
+                extends_class,
+                implements_interfaces,
+                fields,
+                primary_constructor,
+                methods,
+                ..
+            } => {
                 if let Some(ext) = extends_class {
                     self.rename(ext);
                 }
@@ -222,11 +247,15 @@ impl Renamer {
             Decl::Import { .. } => {}
         }
     }
-    
+
     fn visit_stmt(&self, stmt: &mut Spanned<Stmt>) {
         match &mut stmt.node {
             Stmt::Expr(expr) => self.visit_expr(expr),
-            Stmt::VarDecl { type_annot, initializer, .. } => {
+            Stmt::VarDecl {
+                type_annot,
+                initializer,
+                ..
+            } => {
                 if let Some(ty) = type_annot {
                     self.rename_type(ty);
                 }
@@ -239,7 +268,11 @@ impl Renamer {
                     self.visit_stmt(s);
                 }
             }
-            Stmt::If { condition, then_branch, else_branch } => {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.visit_expr(condition);
                 self.visit_stmt(then_branch);
                 if let Some(e) = else_branch {
@@ -254,7 +287,9 @@ impl Renamer {
                 self.visit_expr(iterable);
                 self.visit_stmt(body);
             }
-            Stmt::ForRange { start, end, body, .. } => {
+            Stmt::ForRange {
+                start, end, body, ..
+            } => {
                 self.visit_expr(start);
                 self.visit_expr(end);
                 self.visit_stmt(body);
@@ -266,7 +301,7 @@ impl Renamer {
             }
         }
     }
-    
+
     fn visit_expr(&self, expr: &mut Spanned<Expr>) {
         match &mut expr.node {
             Expr::Identifier(name) => self.rename(name),

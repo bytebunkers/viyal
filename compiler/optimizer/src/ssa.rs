@@ -1,5 +1,7 @@
 use crate::cfg::Cfg;
-use mir::ir::{BasicBlock, Local, LocalDecl, MirFunction, Operand, Phi, Rvalue, Statement, Terminator};
+use mir::ir::{
+    BasicBlock, Local, LocalDecl, MirFunction, Operand, Phi, Rvalue, Statement, Terminator,
+};
 use std::collections::{HashMap, HashSet};
 
 pub fn construct_ssa(mut func: MirFunction) -> MirFunction {
@@ -8,7 +10,7 @@ pub fn construct_ssa(mut func: MirFunction) -> MirFunction {
     }
 
     let cfg = Cfg::new(&func);
-    
+
     // 1. Find all blocks where each local is assigned.
     let mut defs_per_local: HashMap<usize, HashSet<usize>> = HashMap::new();
     for block in &func.basic_blocks {
@@ -21,7 +23,7 @@ pub fn construct_ssa(mut func: MirFunction) -> MirFunction {
 
     // 2. Insert Phi nodes based on Iterated Dominance Frontiers
     let mut phi_placements: HashMap<usize, HashSet<usize>> = HashMap::new(); // local -> block ids
-    
+
     for (loc_idx, def_blocks) in &defs_per_local {
         let mut worklist: Vec<usize> = def_blocks.iter().copied().collect();
         let mut in_worklist: HashSet<usize> = worklist.iter().copied().collect();
@@ -29,12 +31,12 @@ pub fn construct_ssa(mut func: MirFunction) -> MirFunction {
 
         while let Some(b) = worklist.pop() {
             in_worklist.remove(&b);
-            
+
             for &df_block in &cfg.dom_frontiers[b] {
                 if !has_phi.contains(&df_block) {
                     has_phi.insert(df_block);
                     phi_placements.entry(*loc_idx).or_default().insert(df_block);
-                    
+
                     if !in_worklist.contains(&df_block) {
                         in_worklist.insert(df_block);
                         worklist.push(df_block);
@@ -59,7 +61,7 @@ pub fn construct_ssa(mut func: MirFunction) -> MirFunction {
     // 3. Rename variables
     let mut renamer = SsaRenamer::new(&mut func);
     renamer.rename_block(0, &cfg);
-    
+
     func
 }
 
@@ -75,13 +77,13 @@ impl<'a> SsaRenamer<'a> {
     fn new(func: &'a mut MirFunction) -> Self {
         let mut versions = HashMap::new();
         let mut counters = HashMap::new();
-        
+
         // Push the initial versions (0) for all locals (especially parameters)
         for i in 0..func.locals.len() {
             versions.insert(i, vec![i]);
             counters.insert(i, 1); // 1 version exists (the original)
         }
-        
+
         Self {
             func,
             versions,
@@ -92,7 +94,7 @@ impl<'a> SsaRenamer<'a> {
     fn new_version(&mut self, orig: usize) -> usize {
         let count = *self.counters.get(&orig).unwrap();
         self.counters.insert(orig, count + 1);
-        
+
         // Create the new LocalDecl based on the original
         let orig_decl = self.func.locals[orig].clone();
         let new_idx = self.func.locals.len();
@@ -101,7 +103,7 @@ impl<'a> SsaRenamer<'a> {
             name: orig_decl.name.map(|n| format!("{}_{}", n, count)),
             is_mut: false, // SSA variables are immutable!
         });
-        
+
         self.versions.get_mut(&orig).unwrap().push(new_idx);
         new_idx
     }
@@ -115,7 +117,10 @@ impl<'a> SsaRenamer<'a> {
 
         let mut phis = std::mem::take(&mut self.func.basic_blocks[block_id].phis);
         let mut statements = std::mem::take(&mut self.func.basic_blocks[block_id].statements);
-        let mut terminator = std::mem::replace(&mut self.func.basic_blocks[block_id].terminator, Terminator::Unreachable);
+        let mut terminator = std::mem::replace(
+            &mut self.func.basic_blocks[block_id].terminator,
+            Terminator::Unreachable,
+        );
 
         // 1. Rename Phi destinations
         for phi in &mut phis {
@@ -137,7 +142,7 @@ impl<'a> SsaRenamer<'a> {
                 }
             }
         }
-        
+
         // Rename terminator
         self.rename_terminator(&mut terminator);
 
@@ -153,7 +158,8 @@ impl<'a> SsaRenamer<'a> {
             for phi in &mut succ_phis {
                 let orig = phi.orig_local.0;
                 let current_version = self.get_current_version(orig);
-                phi.operands.push((Operand::Copy(Local(current_version)), block_id));
+                phi.operands
+                    .push((Operand::Copy(Local(current_version)), block_id));
             }
             self.func.basic_blocks[succ_id].phis = succ_phis;
         }
@@ -175,7 +181,14 @@ impl<'a> SsaRenamer<'a> {
 
     fn rename_rvalue(&self, rvalue: &mut Rvalue) {
         match rvalue {
-            Rvalue::Use(op) | Rvalue::Length(op) | Rvalue::Try(op) | Rvalue::PropertyAccess(op, _) => self.rename_operand(op),
+            Rvalue::Use(op)
+            | Rvalue::Length(op)
+            | Rvalue::Try(op)
+            | Rvalue::PropertyAccess(op, _) => self.rename_operand(op),
+            Rvalue::PropertyAssign(op1, _, op2) => {
+                self.rename_operand(op1);
+                self.rename_operand(op2);
+            }
             Rvalue::BinaryOp(_, op1, op2) | Rvalue::Index(op1, op2) => {
                 self.rename_operand(op1);
                 self.rename_operand(op2);

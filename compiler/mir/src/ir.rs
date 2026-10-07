@@ -32,7 +32,6 @@ pub struct Phi {
     pub operands: Vec<(Operand, usize)>,
 }
 
-
 #[derive(Debug, Clone)]
 pub enum Statement {
     /// Assignment of an Rvalue to a Local (e.g., _1 = 2 + _3)
@@ -52,6 +51,7 @@ pub enum Rvalue {
     },
     /// Property access (e.g., _1.field)
     PropertyAccess(Operand, String),
+    PropertyAssign(Operand, String, Operand),
     /// Method call (e.g., _1.method(args))
     MethodCall(Operand, String, Vec<Operand>),
     /// Array initialization (e.g., [1, 2, 3])
@@ -124,4 +124,5 @@ impl MirFunction {
 #[derive(Debug, Clone, Default)]
 pub struct MirProgram {
     pub functions: HashMap<String, MirFunction>,
+    pub classes: HashMap<String, Vec<String>>,
 }

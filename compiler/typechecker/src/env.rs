@@ -66,7 +66,10 @@ impl TypeEnv {
                 }
             }
             Type::Array(inner) => Type::Array(Box::new(self.resolve_type(inner))),
-            Type::Map(k, v) => Type::Map(Box::new(self.resolve_type(k)), Box::new(self.resolve_type(v))),
+            Type::Map(k, v) => Type::Map(
+                Box::new(self.resolve_type(k)),
+                Box::new(self.resolve_type(v)),
+            ),
             Type::Nullable(inner) => Type::Nullable(Box::new(self.resolve_type(inner))),
             Type::Result(inner) => Type::Result(Box::new(self.resolve_type(inner))),
             Type::Option(inner) => Type::Option(Box::new(self.resolve_type(inner))),

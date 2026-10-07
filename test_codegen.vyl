@@ -1,0 +1,17 @@
+class Main {
+    void run() {
+        var x = 10;
+        var y = 20;
+        if (x < y) {
+            print("x is less");
+        } else {
+            print("x is greater or equal");
+        }
+        
+        mut i = 0;
+        while (i < 5) {
+            print(i);
+            i = i + 1;
+        }
+    }
+}

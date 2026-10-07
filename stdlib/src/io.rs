@@ -34,7 +34,10 @@ pub fn assert_eq(_vm: &mut crate::VM, args: &[Value]) -> Result<Value, String> {
         if actual == expected {
             return Ok(Value::Void);
         } else {
-            return Err(format!("Assertion failed: expected {:?}, got {:?}", expected, actual));
+            return Err(format!(
+                "Assertion failed: expected {:?}, got {:?}",
+                expected, actual
+            ));
         }
     }
     Err("assertEq() requires exactly 2 arguments".to_string())

@@ -8,15 +8,12 @@ pub fn run(mut func: MirFunction) -> MirFunction {
         return func;
     }
 
-    // Mapping from a canonical string representation of an Rvalue to the local
-    // that first computed this value.
-    let mut value_table: HashMap<String, Local> = HashMap::new();
-
     // Mapping from a local to its value number (which is just the local index of the first computation)
     // Actually, because we just replace Rvalues with Rvalue::Use(Operand::Copy(first_local)),
     // we just need value_table.
 
     for block in &mut func.basic_blocks {
+        let mut value_table: HashMap<String, Local> = HashMap::new();
         for stmt in &mut block.statements {
             if let Statement::Assign(dest, rvalue) = stmt {
                 // We only perform CSE on side-effect-free, deterministic Rvalues.
@@ -27,7 +24,7 @@ pub fn run(mut func: MirFunction) -> MirFunction {
                         // Replace this Rvalue with a simple use of the existing local.
                         *rvalue = Rvalue::Use(Operand::Copy(*existing_local));
                     } else {
-                        // First time seeing this computation
+                        // First time seeing this computation in this block
                         value_table.insert(key, *dest);
                     }
                 }
@@ -45,7 +42,13 @@ fn is_pure(rvalue: &Rvalue) -> bool {
         Rvalue::Index(_, _) | Rvalue::PropertyAccess(_, _) => true, // Assuming no getters with side-effects for now
         // Function calls, method calls, array/map allocations, and try operations might have side effects
         // or return different objects, so they are not pure for GVN purposes.
-        Rvalue::Call { .. } | Rvalue::MethodCall(..) | Rvalue::Array(_) | Rvalue::Map(_) | Rvalue::New(_, _) | Rvalue::Try(_) => false,
+        Rvalue::Call { .. }
+        | Rvalue::MethodCall(..)
+        | Rvalue::Array(_)
+        | Rvalue::Map(_)
+        | Rvalue::New(_, _)
+        | Rvalue::PropertyAssign(_, _, _)
+        | Rvalue::Try(_) => false,
     }
 }
 
@@ -57,10 +60,21 @@ fn canonicalize(rvalue: &Rvalue) -> String {
         Rvalue::BinaryOp(bin_op, lhs, rhs) => {
             // For commutative operations, we could sort the operands to find more matches,
             // but for a simple MVP we just format them as-is.
-            format!("{:?}({}, {})", bin_op, canonicalize_operand(lhs), canonicalize_operand(rhs))
+            format!(
+                "{:?}({}, {})",
+                bin_op,
+                canonicalize_operand(lhs),
+                canonicalize_operand(rhs)
+            )
         }
-        Rvalue::Index(arr, idx) => format!("Index({}, {})", canonicalize_operand(arr), canonicalize_operand(idx)),
-        Rvalue::PropertyAccess(obj, prop) => format!("Prop({}, {})", canonicalize_operand(obj), prop),
+        Rvalue::Index(arr, idx) => format!(
+            "Index({}, {})",
+            canonicalize_operand(arr),
+            canonicalize_operand(idx)
+        ),
+        Rvalue::PropertyAccess(obj, prop) => {
+            format!("Prop({}, {})", canonicalize_operand(obj), prop)
+        }
         _ => "".to_string(), // Unreachable because of is_pure check
     }
 }

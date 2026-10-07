@@ -1,9 +1,9 @@
 [package]
 name = "bytecode"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 ast = { path = "../ast" }
 interpreter = { path = "../interpreter" }
-mir = { version = "0.1.1", path = "../mir" }
+mir = { version = "0.2.0", path = "../mir" }

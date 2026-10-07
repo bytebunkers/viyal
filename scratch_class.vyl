@@ -1,0 +1,1 @@
+class Main { int val; void run() { this.val = 42; print(this.val); } }

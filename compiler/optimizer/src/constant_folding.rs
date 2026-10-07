@@ -1,5 +1,5 @@
-use mir::ir::{BasicBlock, MirFunction, MirProgram, Operand, Rvalue, Statement};
 use ast::{BinaryOp, Literal};
+use mir::ir::{BasicBlock, MirFunction, MirProgram, Operand, Rvalue, Statement};
 
 pub fn fold_program(mut program: MirProgram) -> MirProgram {
     for func in program.functions.values_mut() {
@@ -17,7 +17,9 @@ pub fn fold_function(func: &mut MirFunction) {
 fn fold_block(block: &mut BasicBlock) {
     for stmt in &mut block.statements {
         if let Statement::Assign(_, rvalue) = stmt {
-            if let Rvalue::BinaryOp(op, Operand::Constant(left_lit), Operand::Constant(right_lit)) = rvalue {
+            if let Rvalue::BinaryOp(op, Operand::Constant(left_lit), Operand::Constant(right_lit)) =
+                rvalue
+            {
                 if let Some(result) = evaluate_binary_op(op, left_lit, right_lit) {
                     *rvalue = Rvalue::Use(Operand::Constant(result));
                 }
@@ -28,18 +30,19 @@ fn fold_block(block: &mut BasicBlock) {
 
 fn evaluate_binary_op(op: &BinaryOp, left: &Literal, right: &Literal) -> Option<Literal> {
     match (op, left, right) {
-        // Integer math
-        (BinaryOp::Add, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Integer(l + r)),
-        (BinaryOp::Sub, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Integer(l - r)),
-        (BinaryOp::Mul, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Integer(l * r)),
-        (BinaryOp::Div, Literal::Integer(l), Literal::Integer(r)) => {
-            if *r != 0 {
-                Some(Literal::Integer(l / r))
-            } else {
-                None // Don't constant fold division by zero, let runtime handle it
-            }
+        (BinaryOp::Add, Literal::Integer(l), Literal::Integer(r)) => {
+            l.checked_add(*r).map(Literal::Integer)
         }
-        
+        (BinaryOp::Sub, Literal::Integer(l), Literal::Integer(r)) => {
+            l.checked_sub(*r).map(Literal::Integer)
+        }
+        (BinaryOp::Mul, Literal::Integer(l), Literal::Integer(r)) => {
+            l.checked_mul(*r).map(Literal::Integer)
+        }
+        (BinaryOp::Div, Literal::Integer(l), Literal::Integer(r)) => {
+            l.checked_div(*r).map(Literal::Integer)
+        }
+
         // Float math
         (BinaryOp::Add, Literal::Float(l), Literal::Float(r)) => Some(Literal::Float(l + r)),
         (BinaryOp::Sub, Literal::Float(l), Literal::Float(r)) => Some(Literal::Float(l - r)),
@@ -51,15 +54,23 @@ fn evaluate_binary_op(op: &BinaryOp, left: &Literal, right: &Literal) -> Option<
                 None
             }
         }
-        
+
         // Comparisons
         (BinaryOp::Eq, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Boolean(l == r)),
-        (BinaryOp::NotEq, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Boolean(l != r)),
+        (BinaryOp::NotEq, Literal::Integer(l), Literal::Integer(r)) => {
+            Some(Literal::Boolean(l != r))
+        }
         (BinaryOp::Less, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Boolean(l < r)),
-        (BinaryOp::Greater, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Boolean(l > r)),
-        (BinaryOp::LessEq, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Boolean(l <= r)),
-        (BinaryOp::GreaterEq, Literal::Integer(l), Literal::Integer(r)) => Some(Literal::Boolean(l >= r)),
-        
+        (BinaryOp::Greater, Literal::Integer(l), Literal::Integer(r)) => {
+            Some(Literal::Boolean(l > r))
+        }
+        (BinaryOp::LessEq, Literal::Integer(l), Literal::Integer(r)) => {
+            Some(Literal::Boolean(l <= r))
+        }
+        (BinaryOp::GreaterEq, Literal::Integer(l), Literal::Integer(r)) => {
+            Some(Literal::Boolean(l >= r))
+        }
+
         // Fallback
         _ => None,
     }

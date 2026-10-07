@@ -11,6 +11,12 @@ pub struct GcAllocator<T> {
     free_slots: Vec<usize>,
 }
 
+impl<T> Default for GcAllocator<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> GcAllocator<T> {
     pub fn new() -> Self {
         Self {
@@ -40,7 +46,10 @@ impl<T> GcAllocator<T> {
     }
 
     pub fn get_mut(&mut self, handle: GcHandle) -> Option<&mut T> {
-        self.objects.get_mut(handle.0)?.as_mut().map(|obj| &mut obj.value)
+        self.objects
+            .get_mut(handle.0)?
+            .as_mut()
+            .map(|obj| &mut obj.value)
     }
 
     pub fn mark(&mut self, handle: GcHandle) {

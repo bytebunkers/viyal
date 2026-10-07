@@ -1,5 +1,1 @@
-class Main {
-    void run() {
-        print("Hello from Viyal CLI!");
-    }
-}
+void main() { print("hello"); }

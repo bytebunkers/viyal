@@ -3,7 +3,10 @@ import 'prismjs/components/prism-c.js';
 import 'prismjs/components/prism-bash.js';
 import 'prismjs/themes/prism-tomorrow.css';
 
+import { updateVersionFromGithub } from './github.js';
+
 document.addEventListener('DOMContentLoaded', () => {
+  updateVersionFromGithub('bytebunkers/viyal');
   // Highlight all code blocks manually since we are using ES modules
   Prism.highlightAll();
 

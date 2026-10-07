@@ -1,8 +1,8 @@
 pub mod token;
 
 use logos::Logos;
-use token::Token;
 use std::ops::Range;
+use token::Token;
 
 /// Represents a lexed token along with its span in the source code.
 #[derive(Debug, PartialEq, Clone)]

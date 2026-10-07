@@ -1,9 +1,9 @@
 pub mod analyzer;
 pub mod rules;
 
+use analyzer::Analyzer;
 use ast::Span;
 use parser::Parser;
-use analyzer::Analyzer;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AnalyzerWarning {
@@ -21,6 +21,6 @@ pub fn analyze(source: &str) -> Result<Vec<AnalyzerWarning>, String> {
         Err(errors) => {
             let messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
             Err(format!("Parse errors: {}", messages.join(", ")))
-        },
+        }
     }
 }

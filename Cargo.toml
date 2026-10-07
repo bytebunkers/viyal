@@ -23,5 +23,5 @@ members = [
     "tools/analyzer",
     "tools/lsp",
     "tools/debugger"
-, "compiler/interpreter", "tools/pub"]
+, "compiler/interpreter", "tools/pub", "tests/conformance"]
 resolver = "2"

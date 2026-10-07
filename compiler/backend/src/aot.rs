@@ -33,9 +33,8 @@ pub fn compile_aot(program: &MirProgram, output_path: &Path) -> Result<(), Strin
     let mut flag_builder = settings::builder();
     // "opt_level speed" → enable Cranelift's own peephole optimizations.
     flag_builder.set("opt_level", "speed").unwrap();
-    let isa_builder = cranelift_native::builder().map_err(|e| {
-        format!("Failed to detect host ISA for AOT: {}", e)
-    })?;
+    let isa_builder = cranelift_native::builder()
+        .map_err(|e| format!("Failed to detect host ISA for AOT: {}", e))?;
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .map_err(|e| format!("Failed to build ISA: {}", e))?;
@@ -46,12 +45,9 @@ pub fn compile_aot(program: &MirProgram, output_path: &Path) -> Result<(), Strin
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let obj_builder = ObjectBuilder::new(
-        isa,
-        name.clone(),
-        cranelift_module::default_libcall_names(),
-    )
-    .map_err(|e| format!("Failed to create ObjectBuilder: {}", e))?;
+    let obj_builder =
+        ObjectBuilder::new(isa, name.clone(), cranelift_module::default_libcall_names())
+            .map_err(|e| format!("Failed to create ObjectBuilder: {}", e))?;
     let mut module = ObjectModule::new(obj_builder);
 
     // 3. Shared builder contexts.
@@ -68,8 +64,13 @@ pub fn compile_aot(program: &MirProgram, output_path: &Path) -> Result<(), Strin
         .emit()
         .map_err(|e| format!("[AOT] Object emission error: {}", e))?;
 
-    // Write the intermediate `.o` file alongside the output executable.
-    let obj_path = output_path.with_extension("o");
+    // Write the intermediate object file alongside the output executable.
+    let obj_extension = if cfg!(target_os = "windows") {
+        "obj"
+    } else {
+        "o"
+    };
+    let obj_path = output_path.with_extension(obj_extension);
     std::fs::write(&obj_path, &obj_bytes)
         .map_err(|e| format!("[AOT] Failed to write object file: {}", e))?;
 
@@ -86,10 +87,7 @@ pub fn compile_aot(program: &MirProgram, output_path: &Path) -> Result<(), Strin
     // 7. Clean up the intermediate `.o` file.
     let _ = std::fs::remove_file(&obj_path);
 
-    println!(
-        "[AOT] Build successful: {}",
-        exe_path.display()
-    );
+    println!("[AOT] Build successful: {}", exe_path.display());
 
     Ok(())
 }

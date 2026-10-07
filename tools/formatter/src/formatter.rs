@@ -1,4 +1,4 @@
-use ast::{Program, Decl, Stmt, Expr, Type, Literal, BinaryOp, Method};
+use ast::{BinaryOp, Decl, Expr, Literal, Method, Program, Stmt, Type};
 
 pub struct Formatter {
     output: String,
@@ -63,9 +63,17 @@ impl Formatter {
             Decl::Function(method, _) => {
                 self.format_method(method);
             }
-            Decl::Class { name, extends_class, implements_interfaces: _, fields, primary_constructor, methods, .. } => {
+            Decl::Class {
+                name,
+                extends_class,
+                implements_interfaces: _,
+                fields,
+                primary_constructor,
+                methods,
+                ..
+            } => {
                 self.push(&format!("class {}", name));
-                
+
                 if !primary_constructor.is_empty() {
                     self.push("(");
                     for (i, param) in primary_constructor.iter().enumerate() {
@@ -77,11 +85,11 @@ impl Formatter {
                     }
                     self.push(")");
                 }
-                
+
                 if let Some(ext) = extends_class {
                     self.push(&format!(" extends {}", ext));
                 }
-                
+
                 self.push_line(" {");
                 self.indent();
                 for field in fields {
@@ -104,19 +112,25 @@ impl Formatter {
                 self.dedent();
                 self.push_line("}");
             }
-            Decl::TypeAlias { name, target_type, .. } => {
+            Decl::TypeAlias {
+                name, target_type, ..
+            } => {
                 self.push(&format!("type {} = ", name));
                 self.format_type(target_type);
                 self.push_line(";");
             }
             Decl::Import { path, items } => {
-                let items_str = items.iter().map(|(n, a)| {
-                    if let Some(alias) = a {
-                        format!("{} as {}", n, alias)
-                    } else {
-                        n.clone()
-                    }
-                }).collect::<Vec<_>>().join(", ");
+                let items_str = items
+                    .iter()
+                    .map(|(n, a)| {
+                        if let Some(alias) = a {
+                            format!("{} as {}", n, alias)
+                        } else {
+                            n.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 self.push_line(&format!("import {{ {} }} from \"{}\";", items_str, path));
             }
         }
@@ -155,18 +169,23 @@ impl Formatter {
                 self.format_expr(&expr.node);
                 self.push_line(";");
             }
-            Stmt::VarDecl { is_final, type_annot, name, initializer } => {
+            Stmt::VarDecl {
+                is_final,
+                type_annot,
+                name,
+                initializer,
+            } => {
                 if *is_final {
                     self.push("final ");
                 } else if type_annot.is_none() {
                     self.push("var ");
                 }
-                
+
                 if let Some(t) = type_annot {
                     self.format_type(t);
                     self.push(" ");
                 }
-                
+
                 self.push(name);
                 if let Some(expr) = initializer {
                     self.push(" = ");
@@ -174,7 +193,11 @@ impl Formatter {
                 }
                 self.push_line(";");
             }
-            Stmt::If { condition, then_branch, else_branch } => {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.push("if (");
                 self.format_expr(&condition.node);
                 self.push(") ");
@@ -192,7 +215,11 @@ impl Formatter {
                 self.push(") ");
                 self.format_stmt_as_block(&body.node);
             }
-            Stmt::ForIn { item_name, iterable, body } => {
+            Stmt::ForIn {
+                item_name,
+                iterable,
+                body,
+            } => {
                 self.push("for ");
                 self.push(item_name);
                 self.push(" in ");
@@ -200,7 +227,12 @@ impl Formatter {
                 self.push(" ");
                 self.format_stmt_as_block(&body.node);
             }
-            Stmt::ForRange { item_name, start, end, body } => {
+            Stmt::ForRange {
+                item_name,
+                start,
+                end,
+                body,
+            } => {
                 self.push("for ");
                 self.push(item_name);
                 self.push(" in ");
@@ -244,15 +276,13 @@ impl Formatter {
 
     fn format_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::Literal(lit) => {
-                match lit {
-                    Literal::Integer(i) => self.push(&i.to_string()),
-                    Literal::Float(f) => self.push(&f.to_string()),
-                    Literal::String(s) => self.push(&format!("\"{}\"", s)),
-                    Literal::Boolean(b) => self.push(&b.to_string()),
-                    Literal::Null => self.push("null"),
-                }
-            }
+            Expr::Literal(lit) => match lit {
+                Literal::Integer(i) => self.push(&i.to_string()),
+                Literal::Float(f) => self.push(&f.to_string()),
+                Literal::String(s) => self.push(&format!("\"{}\"", s)),
+                Literal::Boolean(b) => self.push(&b.to_string()),
+                Literal::Null => self.push("null"),
+            },
             Expr::Identifier(ident) => {
                 self.push(ident);
             }
@@ -346,15 +376,13 @@ impl Formatter {
                 self.indent();
                 for (pat, arm_expr) in arms {
                     match pat {
-                        ast::MatchPattern::Literal(lit) => {
-                            match lit {
-                                ast::Literal::Integer(i) => self.push(&i.to_string()),
-                                ast::Literal::Float(f) => self.push(&f.to_string()),
-                                ast::Literal::String(s) => self.push(&format!("\"{}\"", s)),
-                                ast::Literal::Boolean(b) => self.push(&b.to_string()),
-                                ast::Literal::Null => self.push("null"),
-                            }
-                        }
+                        ast::MatchPattern::Literal(lit) => match lit {
+                            ast::Literal::Integer(i) => self.push(&i.to_string()),
+                            ast::Literal::Float(f) => self.push(&f.to_string()),
+                            ast::Literal::String(s) => self.push(&format!("\"{}\"", s)),
+                            ast::Literal::Boolean(b) => self.push(&b.to_string()),
+                            ast::Literal::Null => self.push("null"),
+                        },
                         ast::MatchPattern::Identifier(id) => self.push(id),
                         ast::MatchPattern::CatchAll => self.push("_"),
                     }
@@ -368,7 +396,7 @@ impl Formatter {
             Expr::Try(inner) => {
                 self.format_expr(&inner.node);
                 self.push("?");
-            },
+            }
             Expr::UnwrapOrElse(inner, block) => {
                 self.format_expr(&inner.node);
                 self.push(" or ");

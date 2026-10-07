@@ -16,10 +16,10 @@
 //! **Pass 2 — `compile_mir_function`**: Generates Cranelift IR for the function
 //! body, using the pre-declared `FuncId` map to resolve call targets.
 
-use cranelift_codegen::ir::{
-    condcodes::IntCC, types, AbiParam, Block, Function, InstBuilder, UserFuncName, Value,
-};
 use cranelift_codegen::Context;
+use cranelift_codegen::ir::{
+    AbiParam, Block, Function, InstBuilder, UserFuncName, Value, condcodes::IntCC, types,
+};
 use cranelift_codegen::settings::Configurable;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_module::{FuncId, Linkage, Module};
@@ -34,15 +34,16 @@ use std::collections::HashMap;
 /// Map a Viyal `ast::Type` to a Cranelift scalar type.
 /// For the MVP we support `int` (i64), `double`/`float` (f64), and `bool` (i8).
 /// Everything else (objects, strings) is represented as a pointer-sized integer.
-pub fn viyal_type_to_cl(ty: &Option<Type>) -> types::Type {
+pub fn viyal_type_to_cl(ty: &Option<Type>) -> Option<types::Type> {
     match ty {
         Some(Type::Named(n, _)) => match n.as_str() {
-            "int" | "Int" => types::I64,
-            "double" | "float" | "Float" | "Double" => types::F64,
-            "bool" | "Bool" => types::I8,
-            _ => types::I64, // All objects treated as opaque pointers for now
+            "void" | "Void" => None,
+            "int" | "Int" => Some(types::I64),
+            "double" | "float" | "Float" | "Double" => Some(types::F64),
+            "bool" | "Bool" => Some(types::I8),
+            _ => Some(types::I64), // All objects treated as opaque pointers for now
         },
-        _ => types::I64,
+        _ => Some(types::I64),
     }
 }
 
@@ -75,7 +76,7 @@ impl<'a> FunctionTranslator<'a> {
         // 1. Declare a Cranelift Variable for every MIR local.
         for (idx, local_decl) in mir_fn.locals.iter().enumerate() {
             let var = Variable::from_u32(idx as u32);
-            let cl_type = viyal_type_to_cl(&Some(local_decl.ty.clone()));
+            let cl_type = viyal_type_to_cl(&Some(local_decl.ty.clone())).unwrap_or(types::I64);
             self.builder.declare_var(var, cl_type);
             self.vars.insert(idx, var);
         }
@@ -87,10 +88,13 @@ impl<'a> FunctionTranslator<'a> {
         }
 
         // 3. Append function parameters to the entry block.
-        let entry_block = *self.blocks.get(&0).expect("MIR function has no entry block");
-        self.builder.append_block_params_for_function_params(entry_block);
+        let entry_block = *self
+            .blocks
+            .get(&0)
+            .expect("MIR function has no entry block");
+        self.builder
+            .append_block_params_for_function_params(entry_block);
         self.builder.switch_to_block(entry_block);
-        self.builder.seal_block(entry_block);
 
         // Initialize param locals from entry block params.
         for (param_idx, &local) in mir_fn.params.iter().enumerate() {
@@ -105,7 +109,6 @@ impl<'a> FunctionTranslator<'a> {
             let cl_block = *self.blocks.get(&bb.id).expect("Block not pre-created");
             if bb.id != 0 {
                 self.builder.switch_to_block(cl_block);
-                self.builder.seal_block(cl_block);
             }
             for stmt in &bb.statements {
                 self.translate_stmt(stmt);
@@ -113,6 +116,7 @@ impl<'a> FunctionTranslator<'a> {
             self.translate_terminator(&bb.terminator, mir_fn);
         }
 
+        self.builder.seal_all_blocks();
         self.builder.finalize();
     }
 
@@ -142,12 +146,16 @@ impl<'a> FunctionTranslator<'a> {
                     BinaryOp::Sub => self.builder.ins().isub(l, r),
                     BinaryOp::Mul => self.builder.ins().imul(l, r),
                     BinaryOp::Div => self.builder.ins().sdiv(l, r),
-                    BinaryOp::Eq      => self.builder.ins().icmp(IntCC::Equal, l, r),
-                    BinaryOp::NotEq   => self.builder.ins().icmp(IntCC::NotEqual, l, r),
-                    BinaryOp::Less    => self.builder.ins().icmp(IntCC::SignedLessThan, l, r),
+                    BinaryOp::Eq => self.builder.ins().icmp(IntCC::Equal, l, r),
+                    BinaryOp::NotEq => self.builder.ins().icmp(IntCC::NotEqual, l, r),
+                    BinaryOp::Less => self.builder.ins().icmp(IntCC::SignedLessThan, l, r),
                     BinaryOp::Greater => self.builder.ins().icmp(IntCC::SignedGreaterThan, l, r),
-                    BinaryOp::LessEq  => self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, l, r),
-                    BinaryOp::GreaterEq => self.builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, l, r),
+                    BinaryOp::LessEq => self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, l, r),
+                    BinaryOp::GreaterEq => {
+                        self.builder
+                            .ins()
+                            .icmp(IntCC::SignedGreaterThanOrEqual, l, r)
+                    }
                     BinaryOp::Assign => r,
                 }
             }
@@ -176,18 +184,22 @@ impl<'a> FunctionTranslator<'a> {
                     let sig = self.builder.func.signature.clone();
                     let sig_ref = self.builder.import_signature(sig);
 
-                    let func_ref = self.builder.func.dfg.ext_funcs.push(
-                        cranelift_codegen::ir::ExtFuncData {
-                            name: cranelift_codegen::ir::ExternalName::user(
-                                cranelift_codegen::ir::UserExternalNameRef::from_u32(func_id.as_u32()),
-                            ),
-                            signature: sig_ref,
-                            colocated: true,
-                        }
-                    );
-                    let arg_vals: Vec<Value> = args.iter()
-                        .map(|a| self.translate_operand(a))
-                        .collect();
+                    let func_ref =
+                        self.builder
+                            .func
+                            .dfg
+                            .ext_funcs
+                            .push(cranelift_codegen::ir::ExtFuncData {
+                                name: cranelift_codegen::ir::ExternalName::user(
+                                    cranelift_codegen::ir::UserExternalNameRef::from_u32(
+                                        func_id.as_u32(),
+                                    ),
+                                ),
+                                signature: sig_ref,
+                                colocated: true,
+                            });
+                    let arg_vals: Vec<Value> =
+                        args.iter().map(|a| self.translate_operand(a)).collect();
                     let call = self.builder.ins().call(func_ref, &arg_vals);
                     let results = self.builder.inst_results(call);
                     if results.is_empty() {
@@ -212,7 +224,7 @@ impl<'a> FunctionTranslator<'a> {
         match operand {
             Operand::Constant(lit) => match lit {
                 Literal::Integer(i) => self.builder.ins().iconst(types::I64, *i),
-                Literal::Float(f)   => self.builder.ins().f64const(*f),
+                Literal::Float(f) => self.builder.ins().f64const(*f),
                 Literal::Boolean(b) => self.builder.ins().iconst(types::I8, if *b { 1 } else { 0 }),
                 Literal::String(_) | Literal::Null => self.builder.ins().iconst(types::I64, 0),
             },
@@ -242,17 +254,39 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.ins().jump(target_block, &[]);
             }
 
-            Terminator::If { cond, then_target, else_target } => {
+            Terminator::If {
+                cond,
+                then_target,
+                else_target,
+            } => {
                 let cond_val = self.translate_operand(cond);
-                let then_block = *self.blocks.get(then_target).expect("If then block not found");
-                let else_block = *self.blocks.get(else_target).expect("If else block not found");
-                self.builder.ins().brif(cond_val, then_block, &[], else_block, &[]);
+                let then_block = *self
+                    .blocks
+                    .get(then_target)
+                    .expect("If then block not found");
+                let else_block = *self
+                    .blocks
+                    .get(else_target)
+                    .expect("If else block not found");
+                self.builder
+                    .ins()
+                    .brif(cond_val, then_block, &[], else_block, &[]);
             }
 
-            Terminator::IfOk { val, then_target, else_target } => {
+            Terminator::IfOk {
+                val,
+                then_target,
+                else_target,
+            } => {
                 let v = self.translate_operand(val);
-                let then_block = *self.blocks.get(then_target).expect("IfOk then block not found");
-                let else_block = *self.blocks.get(else_target).expect("IfOk else block not found");
+                let then_block = *self
+                    .blocks
+                    .get(then_target)
+                    .expect("IfOk then block not found");
+                let else_block = *self
+                    .blocks
+                    .get(else_target)
+                    .expect("IfOk else block not found");
                 self.builder.ins().brif(v, then_block, &[], else_block, &[]);
             }
 
@@ -275,11 +309,14 @@ pub fn declare_mir_function<M: Module>(
 ) -> Result<FuncId, String> {
     let mut sig = module.make_signature();
     for &param_local in &mir_fn.params {
-        let cl_ty = viyal_type_to_cl(&Some(mir_fn.locals[param_local.0].ty.clone()));
+        let cl_ty =
+            viyal_type_to_cl(&Some(mir_fn.locals[param_local.0].ty.clone())).unwrap_or(types::I64);
         sig.params.push(AbiParam::new(cl_ty));
     }
     if let Some(ret_ty) = &mir_fn.return_type {
-        sig.returns.push(AbiParam::new(viyal_type_to_cl(&Some(ret_ty.clone()))));
+        if let Some(cl_ty) = viyal_type_to_cl(&Some(ret_ty.clone())) {
+            sig.returns.push(AbiParam::new(cl_ty));
+        }
     }
     module
         .declare_function(&mir_fn.name, Linkage::Export, &sig)
@@ -303,11 +340,14 @@ pub fn compile_mir_function<M: Module>(
 
     let mut sig = module.make_signature();
     for &param_local in &mir_fn.params {
-        let cl_ty = viyal_type_to_cl(&Some(mir_fn.locals[param_local.0].ty.clone()));
+        let cl_ty =
+            viyal_type_to_cl(&Some(mir_fn.locals[param_local.0].ty.clone())).unwrap_or(types::I64);
         sig.params.push(AbiParam::new(cl_ty));
     }
     if let Some(ret_ty) = &mir_fn.return_type {
-        sig.returns.push(AbiParam::new(viyal_type_to_cl(&Some(ret_ty.clone()))));
+        if let Some(cl_ty) = viyal_type_to_cl(&Some(ret_ty.clone())) {
+            sig.returns.push(AbiParam::new(cl_ty));
+        }
     }
 
     ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);

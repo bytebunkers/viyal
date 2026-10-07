@@ -15,4 +15,3 @@ fn test_formatter_expressions() {
     let formatted = format(raw).unwrap();
     assert_eq!(formatted, expected);
 }
-

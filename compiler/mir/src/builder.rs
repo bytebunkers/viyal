@@ -1,11 +1,12 @@
 use crate::ir::*;
-use ast::{Decl, Expr, Program, Spanned, Stmt, Type, MatchPattern};
+use ast::{Decl, Expr, MatchPattern, Program, Spanned, Stmt, Type};
 use std::collections::HashMap;
 
 pub struct MirBuilder {
     program: MirProgram,
     current_func: Option<MirFunction>,
     current_block: usize,
+    env: HashMap<String, Local>,
 }
 
 impl MirBuilder {
@@ -14,6 +15,7 @@ impl MirBuilder {
             program: MirProgram::default(),
             current_func: None,
             current_block: 0,
+            env: HashMap::new(),
         }
     }
 
@@ -28,8 +30,9 @@ impl MirBuilder {
         match decl {
             Decl::Function(method, _) => {
                 let mut func = MirFunction::new(method.name.clone(), method.return_type.clone());
-                
+
                 // Add params as locals
+                self.env.clear();
                 for param in &method.params {
                     let local_idx = func.locals.len();
                     func.locals.push(LocalDecl {
@@ -37,9 +40,10 @@ impl MirBuilder {
                         name: Some(param.name.clone()),
                         is_mut: false,
                     });
+                    self.env.insert(param.name.clone(), Local(local_idx));
                     func.params.push(Local(local_idx));
                 }
-                
+
                 // Start with a basic block
                 let start_block = BasicBlock {
                     id: 0,
@@ -48,27 +52,34 @@ impl MirBuilder {
                     terminator: Terminator::Unreachable,
                 };
                 func.basic_blocks.push(start_block);
-                
+
                 self.current_func = Some(func);
                 self.current_block = 0;
-                
+
                 self.visit_stmt(&method.body.node);
-                
+
                 // Ensure the last block has a terminator
                 let mut func = self.current_func.take().unwrap();
                 let last_block = &mut func.basic_blocks[self.current_block];
                 if matches!(last_block.terminator, Terminator::Unreachable) {
                     last_block.terminator = Terminator::Return { value: None };
                 }
-                
+
                 self.program.functions.insert(func.name.clone(), func);
             }
             Decl::TypeAlias { .. } | Decl::Import { .. } => {}
             Decl::Class { name, methods, .. } => {
-                // To keep it simple for now, we mangle method names as ClassName::MethodName
+                let mut class_methods = Vec::new();
                 for method in methods {
-                    let mut func = MirFunction::new(format!("{}::{}", name, method.name), method.return_type.clone());
-                    
+                    let method_name = method.name.clone();
+                    class_methods.push(method_name.clone());
+                    let mut func = MirFunction::new(
+                        format!("{}::{}", name, method_name),
+                        method.return_type.clone(),
+                    );
+
+                    self.env.clear();
+
                     // Add 'this' param
                     let this_idx = func.locals.len();
                     func.locals.push(LocalDecl {
@@ -76,8 +87,9 @@ impl MirBuilder {
                         name: Some("this".to_string()),
                         is_mut: false,
                     });
+                    self.env.insert("this".to_string(), Local(this_idx));
                     func.params.push(Local(this_idx));
-                    
+
                     for param in &method.params {
                         let local_idx = func.locals.len();
                         func.locals.push(LocalDecl {
@@ -85,9 +97,10 @@ impl MirBuilder {
                             name: Some(param.name.clone()),
                             is_mut: false,
                         });
+                        self.env.insert(param.name.clone(), Local(local_idx));
                         func.params.push(Local(local_idx));
                     }
-                    
+
                     let start_block = BasicBlock {
                         id: 0,
                         phis: Vec::new(),
@@ -95,20 +108,20 @@ impl MirBuilder {
                         terminator: Terminator::Unreachable,
                     };
                     func.basic_blocks.push(start_block);
-                    
+
                     self.current_func = Some(func);
                     self.current_block = 0;
-                    
+
                     self.visit_stmt(&method.body.node);
-                    
+
                     let mut func = self.current_func.take().unwrap();
                     let last_block = &mut func.basic_blocks[self.current_block];
                     if matches!(last_block.terminator, Terminator::Unreachable) {
                         last_block.terminator = Terminator::Return { value: None };
                     }
-                    
                     self.program.functions.insert(func.name.clone(), func);
                 }
+                self.program.classes.insert(name.clone(), class_methods);
             }
             _ => {} // Skip TypeAlias for now
         }
@@ -119,10 +132,18 @@ impl MirBuilder {
             Stmt::Expr(expr) => {
                 let _ = self.visit_expr(&expr.node);
             }
-            Stmt::VarDecl { name, type_annot, initializer, .. } => {
-                let ty = type_annot.clone().unwrap_or(Type::Named("Any".to_string(), Vec::new())); // Fallback
+            Stmt::VarDecl {
+                name,
+                type_annot,
+                initializer,
+                ..
+            } => {
+                let ty = type_annot
+                    .clone()
+                    .unwrap_or(Type::Named("Any".to_string(), Vec::new())); // Fallback
                 let local = self.add_local(ty, Some(name.clone()));
-                
+                self.env.insert(name.clone(), local);
+
                 if let Some(init) = initializer {
                     let operand = self.visit_expr(&init.node);
                     self.add_statement(Statement::Assign(local, Rvalue::Use(operand)));
@@ -133,31 +154,47 @@ impl MirBuilder {
                     self.visit_stmt(&s.node);
                 }
             }
-            Stmt::If { condition, then_branch, else_branch } => {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 let cond_op = self.visit_expr(&condition.node);
-                
+
                 let then_block_id = self.new_block();
-                let else_block_id = if else_branch.is_some() { self.new_block() } else { 0 }; // 0 is placeholder
+                let else_block_id = if else_branch.is_some() {
+                    self.new_block()
+                } else {
+                    0
+                }; // 0 is placeholder
                 let merge_block_id = self.new_block();
-                
-                let actual_else = if else_branch.is_some() { else_block_id } else { merge_block_id };
-                
+
+                let actual_else = if else_branch.is_some() {
+                    else_block_id
+                } else {
+                    merge_block_id
+                };
+
                 self.set_terminator(Terminator::If {
                     cond: cond_op,
                     then_target: then_block_id,
                     else_target: actual_else,
                 });
-                
+
                 self.current_block = then_block_id;
                 self.visit_stmt(&then_branch.node);
-                self.set_terminator(Terminator::Goto { target: merge_block_id });
-                
+                self.set_terminator(Terminator::Goto {
+                    target: merge_block_id,
+                });
+
                 if let Some(else_br) = else_branch {
                     self.current_block = else_block_id;
                     self.visit_stmt(&else_br.node);
-                    self.set_terminator(Terminator::Goto { target: merge_block_id });
+                    self.set_terminator(Terminator::Goto {
+                        target: merge_block_id,
+                    });
                 }
-                
+
                 self.current_block = merge_block_id;
             }
             Stmt::Return(opt_expr) => {
@@ -175,9 +212,11 @@ impl MirBuilder {
                 let cond_block_id = self.new_block();
                 let body_block_id = self.new_block();
                 let exit_block_id = self.new_block();
-                
-                self.set_terminator(Terminator::Goto { target: cond_block_id });
-                
+
+                self.set_terminator(Terminator::Goto {
+                    target: cond_block_id,
+                });
+
                 self.current_block = cond_block_id;
                 let cond_op = self.visit_expr(&condition.node);
                 self.set_terminator(Terminator::If {
@@ -185,113 +224,175 @@ impl MirBuilder {
                     then_target: body_block_id,
                     else_target: exit_block_id,
                 });
-                
+
                 self.current_block = body_block_id;
                 self.visit_stmt(&body.node);
-                self.set_terminator(Terminator::Goto { target: cond_block_id });
-                
+                self.set_terminator(Terminator::Goto {
+                    target: cond_block_id,
+                });
+
                 self.current_block = exit_block_id;
             }
-            Stmt::ForIn { item_name, iterable, body } => {
+            Stmt::ForIn {
+                item_name,
+                iterable,
+                body,
+            } => {
                 let iterable_op = self.visit_expr(&iterable.node);
-                let iterable_local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
+                let iterable_local =
+                    self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
                 self.add_statement(Statement::Assign(iterable_local, Rvalue::Use(iterable_op)));
-                
-                let index_local = self.add_local(Type::Named("Int".to_string(), Vec::new()), Some("__index".to_string()));
-                self.add_statement(Statement::Assign(index_local, Rvalue::Use(Operand::Constant(ast::Literal::Integer(0)))));
-                
-                let length_local = self.add_local(Type::Named("Int".to_string(), Vec::new()), Some("__length".to_string()));
-                self.add_statement(Statement::Assign(length_local, Rvalue::Length(Operand::Copy(iterable_local))));
-                
+
+                let index_local = self.add_local(
+                    Type::Named("Int".to_string(), Vec::new()),
+                    Some("__index".to_string()),
+                );
+                self.add_statement(Statement::Assign(
+                    index_local,
+                    Rvalue::Use(Operand::Constant(ast::Literal::Integer(0))),
+                ));
+
+                let length_local = self.add_local(
+                    Type::Named("Int".to_string(), Vec::new()),
+                    Some("__length".to_string()),
+                );
+                self.add_statement(Statement::Assign(
+                    length_local,
+                    Rvalue::Length(Operand::Copy(iterable_local)),
+                ));
+
                 let cond_block_id = self.new_block();
                 let body_block_id = self.new_block();
                 let exit_block_id = self.new_block();
-                
-                self.set_terminator(Terminator::Goto { target: cond_block_id });
-                
+
+                self.set_terminator(Terminator::Goto {
+                    target: cond_block_id,
+                });
+
                 // cond_block
                 self.current_block = cond_block_id;
                 let cond_local = self.add_local(Type::Named("Bool".to_string(), Vec::new()), None);
-                self.add_statement(Statement::Assign(cond_local, Rvalue::BinaryOp(
-                    ast::BinaryOp::Less,
-                    Operand::Copy(index_local),
-                    Operand::Copy(length_local)
-                )));
+                self.add_statement(Statement::Assign(
+                    cond_local,
+                    Rvalue::BinaryOp(
+                        ast::BinaryOp::Less,
+                        Operand::Copy(index_local),
+                        Operand::Copy(length_local),
+                    ),
+                ));
                 self.set_terminator(Terminator::If {
                     cond: Operand::Copy(cond_local),
                     then_target: body_block_id,
                     else_target: exit_block_id,
                 });
-                
+
                 // body_block
                 self.current_block = body_block_id;
-                let item_local = self.add_local(Type::Named("Any".to_string(), Vec::new()), Some(item_name.clone()));
-                self.add_statement(Statement::Assign(item_local, Rvalue::Index(
-                    Operand::Copy(iterable_local),
-                    Operand::Copy(index_local)
-                )));
-                
+                let item_local = self.add_local(
+                    Type::Named("Any".to_string(), Vec::new()),
+                    Some(item_name.clone()),
+                );
+                self.add_statement(Statement::Assign(
+                    item_local,
+                    Rvalue::Index(Operand::Copy(iterable_local), Operand::Copy(index_local)),
+                ));
+
                 self.visit_stmt(&body.node);
-                
+
                 // index = index + 1
-                let incremented_local = self.add_local(Type::Named("Int".to_string(), Vec::new()), None);
-                self.add_statement(Statement::Assign(incremented_local, Rvalue::BinaryOp(
-                    ast::BinaryOp::Add,
-                    Operand::Copy(index_local),
-                    Operand::Constant(ast::Literal::Integer(1))
-                )));
-                self.add_statement(Statement::Assign(index_local, Rvalue::Use(Operand::Copy(incremented_local))));
-                
-                self.set_terminator(Terminator::Goto { target: cond_block_id });
-                
+                let incremented_local =
+                    self.add_local(Type::Named("Int".to_string(), Vec::new()), None);
+                self.add_statement(Statement::Assign(
+                    incremented_local,
+                    Rvalue::BinaryOp(
+                        ast::BinaryOp::Add,
+                        Operand::Copy(index_local),
+                        Operand::Constant(ast::Literal::Integer(1)),
+                    ),
+                ));
+                self.add_statement(Statement::Assign(
+                    index_local,
+                    Rvalue::Use(Operand::Copy(incremented_local)),
+                ));
+
+                self.set_terminator(Terminator::Goto {
+                    target: cond_block_id,
+                });
+
                 // exit
                 self.current_block = exit_block_id;
             }
-            Stmt::ForRange { item_name, start, end, body, .. } => {
+            Stmt::ForRange {
+                item_name,
+                start,
+                end,
+                body,
+                ..
+            } => {
                 let start_op = self.visit_expr(&start.node);
                 let end_op = self.visit_expr(&end.node);
-                
-                let index_local = self.add_local(Type::Named("Int".to_string(), Vec::new()), Some(item_name.clone()));
+
+                let index_local = self.add_local(
+                    Type::Named("Int".to_string(), Vec::new()),
+                    Some(item_name.clone()),
+                );
                 self.add_statement(Statement::Assign(index_local, Rvalue::Use(start_op)));
-                
-                let end_local = self.add_local(Type::Named("Int".to_string(), Vec::new()), Some("__end".to_string()));
+
+                let end_local = self.add_local(
+                    Type::Named("Int".to_string(), Vec::new()),
+                    Some("__end".to_string()),
+                );
                 self.add_statement(Statement::Assign(end_local, Rvalue::Use(end_op)));
-                
+
                 let cond_block_id = self.new_block();
                 let body_block_id = self.new_block();
                 let exit_block_id = self.new_block();
-                
-                self.set_terminator(Terminator::Goto { target: cond_block_id });
-                
+
+                self.set_terminator(Terminator::Goto {
+                    target: cond_block_id,
+                });
+
                 // cond
                 self.current_block = cond_block_id;
                 let cond_local = self.add_local(Type::Named("Bool".to_string(), Vec::new()), None);
-                self.add_statement(Statement::Assign(cond_local, Rvalue::BinaryOp(
-                    ast::BinaryOp::Less,
-                    Operand::Copy(index_local),
-                    Operand::Copy(end_local)
-                )));
+                self.add_statement(Statement::Assign(
+                    cond_local,
+                    Rvalue::BinaryOp(
+                        ast::BinaryOp::Less,
+                        Operand::Copy(index_local),
+                        Operand::Copy(end_local),
+                    ),
+                ));
                 self.set_terminator(Terminator::If {
                     cond: Operand::Copy(cond_local),
                     then_target: body_block_id,
                     else_target: exit_block_id,
                 });
-                
+
                 // body
                 self.current_block = body_block_id;
                 self.visit_stmt(&body.node);
-                
+
                 // index = index + 1
-                let incremented_local = self.add_local(Type::Named("Int".to_string(), Vec::new()), None);
-                self.add_statement(Statement::Assign(incremented_local, Rvalue::BinaryOp(
-                    ast::BinaryOp::Add,
-                    Operand::Copy(index_local),
-                    Operand::Constant(ast::Literal::Integer(1))
-                )));
-                self.add_statement(Statement::Assign(index_local, Rvalue::Use(Operand::Copy(incremented_local))));
-                
-                self.set_terminator(Terminator::Goto { target: cond_block_id });
-                
+                let incremented_local =
+                    self.add_local(Type::Named("Int".to_string(), Vec::new()), None);
+                self.add_statement(Statement::Assign(
+                    incremented_local,
+                    Rvalue::BinaryOp(
+                        ast::BinaryOp::Add,
+                        Operand::Copy(index_local),
+                        Operand::Constant(ast::Literal::Integer(1)),
+                    ),
+                ));
+                self.add_statement(Statement::Assign(
+                    index_local,
+                    Rvalue::Use(Operand::Copy(incremented_local)),
+                ));
+
+                self.set_terminator(Terminator::Goto {
+                    target: cond_block_id,
+                });
+
                 // exit
                 self.current_block = exit_block_id;
             }
@@ -303,16 +404,22 @@ impl MirBuilder {
         match expr {
             Expr::Literal(lit) => Operand::Constant(lit.clone()),
             Expr::Identifier(name) => {
-                // TODO: Need a real environment to map names to Locals.
-                // For now, this is a placeholder. A real implementation needs scope tracking.
-                Operand::Copy(Local(0)) // BUG: Placeholder
+                if let Some(local) = self.env.get(name) {
+                    Operand::Copy(*local)
+                } else {
+                    // For now, if not found, assume it's a global or something else, but this is an MVP
+                    Operand::Copy(Local(0)) // fallback to this/first arg
+                }
             }
             Expr::Binary(left, op, right) => {
                 let l_op = self.visit_expr(&left.node);
                 let r_op = self.visit_expr(&right.node);
-                
+
                 let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
-                self.add_statement(Statement::Assign(local, Rvalue::BinaryOp(op.clone(), l_op, r_op)));
+                self.add_statement(Statement::Assign(
+                    local,
+                    Rvalue::BinaryOp(op.clone(), l_op, r_op),
+                ));
                 Operand::Copy(local)
             }
             Expr::Call(callee, _, args) => {
@@ -323,7 +430,24 @@ impl MirBuilder {
                         arg_ops.push(self.visit_expr(&arg.node));
                     }
                     let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
-                    self.add_statement(Statement::Assign(local, Rvalue::MethodCall(obj_op, method_name.clone(), arg_ops)));
+                    self.add_statement(Statement::Assign(
+                        local,
+                        Rvalue::MethodCall(obj_op, method_name.clone(), arg_ops),
+                    ));
+                    Operand::Copy(local)
+                } else if let Expr::Identifier(func_name) = &callee.node {
+                    let mut arg_ops = Vec::new();
+                    for arg in args {
+                        arg_ops.push(self.visit_expr(&arg.node));
+                    }
+                    let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
+                    self.add_statement(Statement::Assign(
+                        local,
+                        Rvalue::Call {
+                            func: Operand::Constant(ast::Literal::String(func_name.clone())),
+                            args: arg_ops,
+                        },
+                    ));
                     Operand::Copy(local)
                 } else {
                     let func_op = self.visit_expr(&callee.node);
@@ -331,11 +455,29 @@ impl MirBuilder {
                     for arg in args {
                         arg_ops.push(self.visit_expr(&arg.node));
                     }
-                    
+
                     let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
-                    self.add_statement(Statement::Assign(local, Rvalue::Call { func: func_op, args: arg_ops }));
+                    self.add_statement(Statement::Assign(
+                        local,
+                        Rvalue::Call {
+                            func: func_op,
+                            args: arg_ops,
+                        },
+                    ));
                     Operand::Copy(local)
                 }
+            }
+            Expr::New(class_name, _, args) => {
+                let mut arg_ops = Vec::new();
+                for arg in args {
+                    arg_ops.push(self.visit_expr(&arg.node));
+                }
+                let local = self.add_local(Type::Named(class_name.clone(), Vec::new()), None);
+                self.add_statement(Statement::Assign(
+                    local,
+                    Rvalue::New(class_name.clone(), arg_ops),
+                ));
+                Operand::Copy(local)
             }
             Expr::Array(elements) => {
                 let mut ops = Vec::new();
@@ -360,7 +502,21 @@ impl MirBuilder {
             Expr::PropertyAccess(obj, prop) => {
                 let obj_op = self.visit_expr(&obj.node);
                 let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
-                self.add_statement(Statement::Assign(local, Rvalue::PropertyAccess(obj_op, prop.clone())));
+                self.add_statement(Statement::Assign(
+                    local,
+                    Rvalue::PropertyAccess(obj_op, prop.clone()),
+                ));
+                Operand::Copy(local)
+            }
+            Expr::PropertyAssign(obj, prop, value) => {
+                let obj_op = self.visit_expr(&obj.node);
+                let val_op = self.visit_expr(&value.node);
+
+                let local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
+                self.add_statement(Statement::Assign(
+                    local,
+                    Rvalue::PropertyAssign(obj_op, prop.clone(), val_op),
+                ));
                 Operand::Copy(local)
             }
             Expr::Match(subject, arms) => {
@@ -375,15 +531,22 @@ impl MirBuilder {
 
                     match pattern {
                         MatchPattern::CatchAll => {
-                            self.set_terminator(Terminator::Goto { target: body_block_id });
+                            self.set_terminator(Terminator::Goto {
+                                target: body_block_id,
+                            });
                         }
                         MatchPattern::Literal(lit) => {
-                            let cond_local = self.add_local(Type::Named("Bool".to_string(), Vec::new()), None);
+                            let cond_local =
+                                self.add_local(Type::Named("Bool".to_string(), Vec::new()), None);
                             self.add_statement(Statement::Assign(
                                 cond_local,
-                                Rvalue::BinaryOp(ast::BinaryOp::Eq, subject_op.clone(), Operand::Constant(lit.clone()))
+                                Rvalue::BinaryOp(
+                                    ast::BinaryOp::Eq,
+                                    subject_op.clone(),
+                                    Operand::Constant(lit.clone()),
+                                ),
                             ));
-                            
+
                             self.set_terminator(Terminator::If {
                                 cond: Operand::Copy(cond_local),
                                 then_target: body_block_id,
@@ -392,9 +555,17 @@ impl MirBuilder {
                         }
                         MatchPattern::Identifier(name) => {
                             // Map the identifier to a new local, copy the subject into it
-                            let bound_local = self.add_local(Type::Named("Any".to_string(), Vec::new()), Some(name.clone()));
-                            self.add_statement(Statement::Assign(bound_local, Rvalue::Use(subject_op.clone())));
-                            self.set_terminator(Terminator::Goto { target: body_block_id });
+                            let bound_local = self.add_local(
+                                Type::Named("Any".to_string(), Vec::new()),
+                                Some(name.clone()),
+                            );
+                            self.add_statement(Statement::Assign(
+                                bound_local,
+                                Rvalue::Use(subject_op.clone()),
+                            ));
+                            self.set_terminator(Terminator::Goto {
+                                target: body_block_id,
+                            });
                         }
                     }
 
@@ -402,7 +573,9 @@ impl MirBuilder {
                     self.current_block = body_block_id;
                     let body_val = self.visit_expr(&expr.node);
                     self.add_statement(Statement::Assign(result_local, Rvalue::Use(body_val)));
-                    self.set_terminator(Terminator::Goto { target: merge_block_id });
+                    self.set_terminator(Terminator::Goto {
+                        target: merge_block_id,
+                    });
 
                     // Set up for next iteration
                     self.current_block = next_test_block_id;
@@ -421,32 +594,46 @@ impl MirBuilder {
             Expr::UnwrapOrElse(inner, block) => {
                 let inner_op = self.visit_expr(&inner.node);
                 let result_local = self.add_local(Type::Named("Any".to_string(), Vec::new()), None);
-                
+
                 let ok_block_id = self.new_block();
                 let err_block_id = self.new_block();
                 let merge_block_id = self.new_block();
-                
+
                 self.set_terminator(Terminator::IfOk {
                     val: inner_op.clone(),
                     then_target: ok_block_id,
                     else_target: err_block_id,
                 });
-                
+
                 // OK path: just assign the result
                 self.current_block = ok_block_id;
                 self.add_statement(Statement::Assign(result_local, Rvalue::Use(inner_op)));
-                self.set_terminator(Terminator::Goto { target: merge_block_id });
-                
+                self.set_terminator(Terminator::Goto {
+                    target: merge_block_id,
+                });
+
                 // ERR path: execute block (which might return/throw, or evaluate to a value)
                 self.current_block = err_block_id;
                 self.visit_stmt(&block.node);
                 // Viyal blocks in UnwrapOrElse are technically Statements, but they act like expressions.
                 // For MVP, we'll assign Null to result_local if it reaches here, though it likely returns.
-                self.add_statement(Statement::Assign(result_local, Rvalue::Use(Operand::Constant(ast::Literal::Null))));
-                self.set_terminator(Terminator::Goto { target: merge_block_id });
-                
+                self.add_statement(Statement::Assign(
+                    result_local,
+                    Rvalue::Use(Operand::Constant(ast::Literal::Null)),
+                ));
+                self.set_terminator(Terminator::Goto {
+                    target: merge_block_id,
+                });
+
                 self.current_block = merge_block_id;
                 Operand::Copy(result_local)
+            }
+            Expr::This => {
+                if let Some(local) = self.env.get("this") {
+                    Operand::Copy(*local)
+                } else {
+                    panic!("'this' used outside of a method");
+                }
             }
             _ => {
                 // Fallback placeholder
@@ -454,29 +641,36 @@ impl MirBuilder {
             }
         }
     }
-    
+
     // --- Helpers ---
-    
+
     fn add_local(&mut self, ty: Type, name: Option<String>) -> Local {
         let func = self.current_func.as_mut().unwrap();
         let idx = func.locals.len();
-        func.locals.push(LocalDecl { ty, name, is_mut: true });
+        func.locals.push(LocalDecl {
+            ty,
+            name,
+            is_mut: true,
+        });
         Local(idx)
     }
-    
+
     fn add_statement(&mut self, stmt: Statement) {
         let func = self.current_func.as_mut().unwrap();
         func.basic_blocks[self.current_block].statements.push(stmt);
     }
-    
+
     fn set_terminator(&mut self, term: Terminator) {
         let func = self.current_func.as_mut().unwrap();
         // Only set if it's currently Unreachable (so we don't overwrite a Return)
-        if matches!(func.basic_blocks[self.current_block].terminator, Terminator::Unreachable) {
+        if matches!(
+            func.basic_blocks[self.current_block].terminator,
+            Terminator::Unreachable
+        ) {
             func.basic_blocks[self.current_block].terminator = term;
         }
     }
-    
+
     fn new_block(&mut self) -> usize {
         let func = self.current_func.as_mut().unwrap();
         let id = func.basic_blocks.len();

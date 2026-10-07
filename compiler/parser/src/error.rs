@@ -7,7 +7,7 @@ use thiserror::Error;
 #[diagnostic(code(viyal::syntax_error))]
 pub struct ParseError {
     pub message: String,
-    
+
     #[label("here")]
     pub span: Span,
 }

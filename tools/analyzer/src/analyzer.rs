@@ -1,6 +1,6 @@
-use ast::{Program, Decl, Stmt, Expr};
 use crate::AnalyzerWarning;
 use crate::rules::{AnalyzerRule, EmptyBlockRule};
+use ast::{Decl, Expr, Program, Stmt};
 
 pub struct Analyzer {
     rules: Vec<Box<dyn AnalyzerRule>>,
@@ -32,7 +32,7 @@ impl Analyzer {
                 self.warnings.push(warning);
             }
         }
-        
+
         match decl {
             Decl::Function(method, _) => {
                 self.visit_stmt(&method.body.node);
@@ -67,7 +67,11 @@ impl Analyzer {
                     self.visit_stmt(&s.node);
                 }
             }
-            Stmt::If { condition, then_branch, else_branch } => {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.visit_expr(&condition.node);
                 self.visit_stmt(&then_branch.node);
                 if let Some(e) = else_branch {
@@ -82,7 +86,9 @@ impl Analyzer {
                 self.visit_expr(&iterable.node);
                 self.visit_stmt(&body.node);
             }
-            Stmt::ForRange { start, end, body, .. } => {
+            Stmt::ForRange {
+                start, end, body, ..
+            } => {
                 self.visit_expr(&start.node);
                 self.visit_expr(&end.node);
                 self.visit_stmt(&body.node);

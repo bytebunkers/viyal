@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://viyal.bytebunkers.com/sitemap.xml

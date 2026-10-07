@@ -1,5 +1,3 @@
-
-
 pub trait Trace {
     fn trace(&self, gc: &mut Gc);
 }

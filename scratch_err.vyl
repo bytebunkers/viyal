@@ -1,0 +1,1 @@
+class Main { int! get_err() { return error("test"); } void run() { var a = this.get_err(); var b = a or { print("caught"); return; }; print("not caught"); } }

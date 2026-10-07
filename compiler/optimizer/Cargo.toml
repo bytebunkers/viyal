@@ -1,8 +1,12 @@
 [package]
 name = "optimizer"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-ast = { version = "0.1.1", path = "../ast" }
-mir = { version = "0.1.1", path = "../mir" }
+ast = { version = "0.2.0", path = "../ast" }
+mir = { version = "0.2.0", path = "../mir" }
+
+[dev-dependencies]
+parser = { path = "../parser" }
+backend = { path = "../backend" }

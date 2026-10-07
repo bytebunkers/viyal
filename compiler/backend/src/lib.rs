@@ -45,7 +45,10 @@ mod tests {
     fn make_add_program() -> MirProgram {
         let mut program = MirProgram::default();
 
-        let mut func = MirFunction::new("main".to_string(), Some(Type::Named("int".to_string(), vec![])));
+        let mut func = MirFunction::new(
+            "main".to_string(),
+            Some(Type::Named("int".to_string(), vec![])),
+        );
 
         // Local 0: the return value slot.
         func.locals.push(LocalDecl {
@@ -95,13 +98,13 @@ mod tests {
         // We only check that the object-file emission step succeeds.
         // Full linking requires a system linker, so we stop just before that.
         // This validates the Cranelift compilation pipeline.
-        use cranelift_codegen::{settings};
+        use crate::translator::compile_mir_program;
+        use cranelift_codegen::settings;
         use cranelift_codegen::settings::Configurable;
         use cranelift_frontend::FunctionBuilderContext;
         use cranelift_module::Module;
-        use cranelift_object::{ObjectBuilder, ObjectModule};
         use cranelift_native;
-        use crate::translator::compile_mir_program;
+        use cranelift_object::{ObjectBuilder, ObjectModule};
 
         let mut flag_builder = settings::builder();
         flag_builder.set("opt_level", "speed").unwrap();

@@ -1,0 +1,17 @@
+[package]
+name = "conformance"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lexer = { path = "../../compiler/lexer" }
+parser = { path = "../../compiler/parser" }
+ast = { path = "../../compiler/ast" }
+resolver = { path = "../../compiler/resolver" }
+typechecker = { path = "../../compiler/typechecker" }
+interpreter = { path = "../../compiler/interpreter" }
+bytecode = { path = "../../compiler/bytecode" }
+mir = { path = "../../compiler/mir" }
+optimizer = { path = "../../compiler/optimizer" }
+vm = { path = "../../vm" }
+stdlib = { path = "../../stdlib" }

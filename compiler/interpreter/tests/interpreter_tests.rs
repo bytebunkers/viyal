@@ -1,5 +1,5 @@
-use parser::Parser;
 use interpreter::Interpreter;
+use parser::Parser;
 
 #[test]
 fn test_print_execution() {
@@ -10,14 +10,14 @@ fn test_print_execution() {
             }
         }
     "#;
-    
+
     let mut parser = Parser::new(source);
     let program = parser.parse_program().unwrap();
-    
+
     let mut output = String::new();
     let mut interpreter = Interpreter::new(&mut output);
-    
+
     interpreter.interpret(&program).unwrap();
-    
+
     assert_eq!(output, "Hello\n");
 }
